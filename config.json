@@ -1,0 +1,9 @@
+{
+  "token": "DISCORD_TOKEN",
+  "channelMappings": [
+    {
+      "channelId": "CHANNEL_ID",
+      "webhookUrl": "WEBHOOK_URL"
+    }
+  ]
+}
