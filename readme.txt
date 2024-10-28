@@ -10,9 +10,6 @@ This project was initially created as part of EVE Online's spy meta. After manag
 * Pretending to be a web client to mimic Desktop Client.
 * This is a basic version built from scratch, and while it works, a few bugs remain, mainly:
 
-Known Bug: Roles and usernames not converting to text, but instead Discord ID. (<@ ) - I'll eventually fix this.
-Feel free to submit issues if you find any bugs or have feature requests. I may eventually add new features or fix existing issues.
-
 # Setup Guide
 Install Node.js
 
