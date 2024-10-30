@@ -2,12 +2,12 @@
 Discord Selfbot Relay allows users to plug in their token and relay messages from specific channel_ids to Discord webhooks.
 
 # Purpose
-This project was initially created as part of EVE Online's spy meta. After managing Intel-related tasks for many years and running one of the largest Intelligence Organizations in EVE Online, I developed this as a thank you to a member who greatly helped me. It’s a lightweight tool with several tricks, including:
+This project was created to relay messages from hostile discords to discord webhooks for intelligence in EVE Online. After managing Intel-related tasks for one of the largest coalitions in the game, I had retired. Using the knowledge I had gained, I developed this as a thank you to one of my friends who greatly helped my new alliance. It is intended to be lightweight tool that can be run locally.
 
 # Features
-* Relay messages from specific channel_ids to Discord webhooks.
-* Preventing force embedding to detect channels being relayed.
-* Pretending to be a web client to mimic Desktop Client.
+* Relay messages from specific channel_ids to (discord) webhooks.
+* Preventing abusing embedding images to detect channels being relayed.
+* Mimics Desktop Client.
 
 # Setup Guide
 Install Node.js
