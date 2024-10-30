@@ -54,6 +54,22 @@ function sanitizeMessage(content) {
     return content;
 }
 
+const resolveMentions = (message) => {
+    const userMentionRegex = /<@!?(\d+)>/g;
+    let content = message.content.replace(userMentionRegex, (match, userId) => {
+        const user = message.guild.members.cache.get(userId);
+        return user ? `@${user.displayName || user.user.username}` : match;
+    });
+
+    const roleMentionRegex = /<@&(\d+)>/g;
+    content = content.replace(roleMentionRegex, (match, roleId) => {
+        const role = message.guild.roles.cache.get(roleId);
+        return role ? `@${role.name}` : match;
+    });
+
+    return content;
+};
+
 // Sanitize embeds
 function sanitizeEmbeds(embeds) {
     return embeds.map(embed => ({
@@ -81,7 +97,7 @@ const sendToWebhook = async (message, isUpdate = false) => {
     }
 
     const displayName = message.member ? message.member.displayName : message.author.username;
-    const sanitizedContent = sanitizeMessage(message.content);
+    const sanitizedContent = sanitizeMessage(resolveMentions(message)); // Resolve and sanitize message content
 
     const messageData = {
         username: displayName + " #" + message.channel.name,
@@ -90,7 +106,6 @@ const sendToWebhook = async (message, isUpdate = false) => {
         embeds: sanitizeEmbeds(message.embeds),
     };
 
-    // Prepare attachments if there are any
     let form = new FormData();
     form.append('payload_json', JSON.stringify(messageData));
 
