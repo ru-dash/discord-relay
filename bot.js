@@ -136,6 +136,10 @@ const sendToWebhook = async (message, isUpdate = false) => {
 
 // Listen for new messages
 client.on('messageCreate', message => {
+    if (message.flags && message.flags.has('EPHEMERAL')) {
+        console.log(`Ephemeral: ${message.channel.id}`);
+        return;
+    }
     sendToWebhook(message);
     console.log(`New message sent to webhook for channel: ${message.channel.id}`);
 });
