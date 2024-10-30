@@ -8,7 +8,6 @@ This project was initially created as part of EVE Online's spy meta. After manag
 * Relay messages from specific channel_ids to Discord webhooks.
 * Preventing force embedding to detect channels being relayed.
 * Pretending to be a web client to mimic Desktop Client.
-* This is a basic version built from scratch, and while it works, a few bugs remain, mainly:
 
 # Setup Guide
 Install Node.js
