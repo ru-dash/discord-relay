@@ -65,7 +65,9 @@ function sanitizeEmbeds(embeds) {
             inline: field.inline
         })) : null,
         image: null, // Remove images
-        thumbnail: null // Remove thumbnails
+        thumbnail: null, // Remove thumbnails
+        footer: embed.footer ? { text: sanitizeMessage(embed.footer.text) } : null,
+        timestamp: embed.timestamp || null
     }));
 }
 
