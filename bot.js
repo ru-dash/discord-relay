@@ -349,8 +349,15 @@ async function fetchAndSaveChannelMembers(channelId) {
     }
 }
 
-const sendSystemNotification = async (title, description, fields = []) => {
+const sendSystemNotification = async (guild, title, description, fields = []) => {
     const systemHook = config.systemHook;
+
+    color = {
+        "Guild Joined" : 894976,
+        "Guild Left" : 11010048,
+        "Channel Updated" : 22696,
+        "Role Update" : 14680319
+    }
 
     if (!systemHook) {
         console.warn('SystemHook not configured in the config file.');
@@ -358,6 +365,8 @@ const sendSystemNotification = async (title, description, fields = []) => {
     }
 
     const embed = {
+        color: color[title],
+        author: {name: guild.name, icon_url: guild.iconURL(false)},
         title: title,
         description: description,
         fields: fields,
@@ -393,6 +402,7 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 
         // Send a system notification with the role changes
         sendSystemNotification(
+            newMember.guild,
             'Role Update',
             `Roles for **${config.agentName || client.user.username}** were updated in guild **${newMember.guild.name}**.`,
             fields
@@ -402,15 +412,17 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 
 client.on('guildCreate', (guild) => {
     sendSystemNotification(
+        guild,
         'Guild Joined',
-        `${config.agentName} has joined the guild **${guild.name}** (ID: ${guild.id}).`
+        `**${config.agentName}** has joined the guild **${guild.name}** (ID: ${guild.id}).`
     );
 });
 
 client.on('guildDelete', (guild) => {
     sendSystemNotification(
+        guild,
         'Guild Left',
-        `${config.agentName} has left the guild **${guild.name}** (ID: ${guild.id}).`
+        `**${config.agentName}** has left the guild **${guild.name}** (ID: ${guild.id}).`
     );
 });
 
@@ -485,6 +497,7 @@ client.on('channelUpdate', async (oldChannel, newChannel) => {
     // If there are changes, send a notification
     if (fields.length > 1) { // At least one change + viewable status
         sendSystemNotification(
+            guild,
             'Channel Updated',
             `Channel **${newChannel.name}** in guild **${guild.name}** was updated.`,
             fields
