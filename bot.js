@@ -4,12 +4,93 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
+const sqlite3 = require('sqlite3').verbose();
 
 const configPath = process.argv[2] || path.join(__dirname, 'config.json'); // Use a default path if no argument is provided
 let config = { token: '', channelMappings: [] };
 
 // Load config
 const defaultConfig = { token: '', channelMappings: [] };
+
+// Initialize SQLite Database
+const db = new sqlite3.Database('./messages.db', (err) => {
+    if (err) {
+        console.error('Error connecting to SQLite:', err.message);
+    } else {
+        console.log('Connected to SQLite database.');
+    }
+});
+
+// Create table for messages
+db.run(
+    `CREATE TABLE IF NOT EXISTS messages (
+                                             id TEXT PRIMARY KEY,
+                                             channelId TEXT,
+                                             channelName TEXT,
+                                             guildId TEXT,
+                                             guildName TEXT,
+                                             authorId TEXT,
+                                             authorDisplayName TEXT,
+                                             content TEXT,
+                                             createdAt TEXT,
+                                             updatedAt TEXT
+     )`,
+    (err) => {
+        if (err) {
+            console.error('Error creating table:', err.message);
+        } else {
+            console.log('Messages table ensured.');
+        }
+    }
+);
+
+function isRelayedGuild(guildId) {
+    // Check if any channel in the webhook map belongs to the given guild
+    return Object.keys(channelWebhookMap).some(channelId => {
+        const channel = client.channels.cache.get(channelId);
+        return channel && channel.guild.id === guildId;
+    });
+}
+
+// Function to save message to SQLite
+function saveMessageToDB(message) {
+    if (!message.guild || !isRelayedGuild(message.guild.id)) return;
+
+    const guildName = message.guild.name;
+    const channelName = message.channel.name;
+    const authorDisplayName = message.member ? message.member.displayName : message.author.username;
+
+    const sql = `INSERT INTO messages (id, channelId, channelName, guildId, guildName, authorId, authorDisplayName, content, createdAt, updatedAt) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+                 ON CONFLICT(id) 
+                 DO UPDATE SET 
+                    content = excluded.content, 
+                    updatedAt = excluded.updatedAt,
+                    guildName = excluded.guildName,
+                    channelName = excluded.channelName,
+                    authorDisplayName = excluded.authorDisplayName`;
+
+    const params = [
+        message.id,
+        message.channel.id,
+        channelName,
+        message.guild.id,
+        guildName,
+        message.author.id,
+        authorDisplayName,
+        message.content || null,
+        message.createdTimestamp,
+        message.editedTimestamp || null,
+    ];
+
+    db.run(sql, params, (err) => {
+        if (err) {
+            console.error('Error saving message to SQLite:', err.message);
+        } else {
+            console.log(`Message ${message.id} saved/updated in SQLite.`);
+        }
+    });
+}
 
 if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
@@ -157,6 +238,9 @@ client.on('messageCreate', message => {
     }
     sendToWebhook(message);
     console.log(`New message sent to webhook for channel: ${message.channel.id}`);
+
+    if (!message.guild) return; // Ignore DMs and bot messages
+    saveMessageToDB(message);
 });
 
 // Listen for message updates
@@ -167,7 +251,60 @@ client.on('messageUpdate', (oldMessage, newMessage) => {
     } else {
         console.log(`No mapping found for message ID: ${oldMessage.id}, cannot update.`);
     }
+    if (!newMessage.guild) return; // Ignore DMs and bot messages
+    saveMessageToDB(newMessage);
 });
+
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+
+    // Lazy load members for all relayed channels
+    config.channelMappings.forEach(mapping => {
+        fetchAndPrintChannelMembers(mapping.channelId);
+    });
+});
+
+async function fetchAndPrintChannelMembers(channelId) {
+    const channel = client.channels.cache.get(channelId);
+
+    // Check if the channel is a text-based channel
+    if (!channel || (channel.type !== 'GUILD_TEXT' && channel.type !== 'GUILD_NEWS')) {
+        console.error(`Channel with ID ${channelId} is not a valid text-based channel.`);
+        return;
+    }
+
+    const guild = channel.guild;
+
+    try {
+        // Fetch all members in the guild
+        const members = await guild.members.fetch();
+
+        console.log(`Members in channel '${channel.name}':`);
+        members.forEach(member => {
+            // Get roles
+            const roleNames = member.roles.cache
+                .filter(role => role.name !== '@everyone') // Exclude the default role
+                .map(role => role.name)
+                .join(', '); // Join role names with a comma
+
+            // Get presence information
+            const presence = member.presence;
+            const status = presence ? presence.status : 'offline';
+            const clientPlatforms = presence?.clientStatus
+                ? Object.entries(presence.clientStatus)
+                    .map(([platform, status]) => `${platform} (${status})`)
+                    .join(', ')
+                : 'No platforms';
+
+            console.log(`- ${member.displayName} (ID: ${member.user.id})`);
+            console.log(`  Roles: ${roleNames || 'None'}`);
+            console.log(`  Status: ${status}`);
+            console.log(`  Platforms: ${clientPlatforms}`);
+        });
+    } catch (error) {
+        console.error(`Error fetching members for channel '${channel.name}': ${error.message}`);
+    }
+}
 
 // Start the bot
 console.log('Attempting to log in...');
