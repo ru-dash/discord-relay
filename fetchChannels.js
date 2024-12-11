@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const configPath = path.join(__dirname, 'config.json');
 if (!fs.existsSync(configPath)) {
-    console.error('Config file not found. Please ensure config.json exists.');
+    console.error('Config file not found! Please ensure config.json exists.');
     process.exit(1);
 }
 
