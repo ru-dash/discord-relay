@@ -1,12 +1,12 @@
 # Discord Selfbot Relay
-This project was created to relay messages from hostile discords to discord webhooks for intelligence in EVE Online. After managing Intel-related tasks for one of the largest coalitions in the game, I had retired. Using the knowledge I had gained, I developed this as a thank you to one of my friends who greatly helped my new alliance. It is intended to be lightweight tool that can be run locally.
+This project was created to relay messages from hostile discords to discord webhooks for intelligence in EVE Online. After managing Intel-related tasks for one of the largest coalitions in the game, I had retired. Using the knowledge I had gained, I developed this as a thank you to one of my friends who greatly helped my new alliance. It is intended to be lightweight tool that can be run locally. Discord does not encourage the use of selfbots, so there is some risk of a ban!
 
 # Features
 * Relay messages from specific channel_ids to (discord) webhooks.
 * Relay events from relayed channel_ids to (discord) webhooks.
 * Relays role updates and guild join/leave for the bot. As well as channel updates in relayed channel id guilds.
 * Preventing abusing embedding images to detect channels being relayed.
-* Mimics Desktop Client.
+* Displays as Desktop Client.
 * Lazy loads Member List and saves messages to SQL for later use.
 
 # Setup Guide
