@@ -1,9 +1,12 @@
 {
-  "token": "DISCORD_TOKEN",
-  "channelMappings": [
-    {
-      "channelId": "CHANNEL_ID",
-      "webhookUrl": "WEBHOOK_URL"
-    }
-  ]
-}
+    "agentName": "AGENT_NAME",
+    "token": "DISCORD_TOKEN",
+    "systemHook": "SYSTEM_WEBHOOK_URL",
+    "eventHook": "EVENT_WEBHOOK_URL",
+    "channelMappings": [
+      {
+        "channelId": "CHANNEL_ID",
+        "webhookUrl": "WEBHOOK_URL"
+      }
+    ]
+  }
