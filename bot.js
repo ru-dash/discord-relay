@@ -356,7 +356,9 @@ const sendSystemNotification = async (guild, title, description, fields = []) =>
         "Guild Joined" : 894976,
         "Guild Left" : 11010048,
         "Channel Updated" : 22696,
-        "Role Update" : 14680319
+        "Role Update" : 14680319,
+        "Event Created" : 14075136,
+        "Event Deleted" : 12483072,
     }
 
     if (!systemHook) {
@@ -504,6 +506,24 @@ client.on('channelUpdate', async (oldChannel, newChannel) => {
         );
     }
 });
+
+// fire when a Event is created
+client.on("guildScheduledEventCreate", (guildEvent) => {
+    sendSystemNotification(
+        guildEvent.guild,
+        "Event Created", 
+        `Event *${guildEvent.name}* was scheduled for ${guildEvent.scheduledStartAt} \n Description: ${guildEvent.description}`
+    )
+})
+
+// fire when a Event is deleted
+client.on("guildScheduledEventDelete", (guildEvent) => {
+    sendSystemNotification(
+        guildEvent.guild,
+        "Event Deleted", 
+        `Event *${guildEvent.name}* was deleted`
+    )
+})
 
 // Start the bot
 console.log('Attempting to log in...');
