@@ -44,6 +44,28 @@ db.run(
     }
 );
 
+db.run(
+    `CREATE TABLE IF NOT EXISTS channel_members (
+        id TEXT PRIMARY KEY,
+        channelId TEXT,
+        channelName TEXT,
+        guildId TEXT,
+        guildName TEXT,
+        userId TEXT,
+        displayName TEXT,
+        roles TEXT,
+        status TEXT,
+        platforms TEXT
+    )`,
+    (err) => {
+        if (err) {
+            console.error('Error creating table:', err.message);
+        } else {
+            console.log('Channel members table ensured.');
+        }
+    }
+);
+
 function isRelayedGuild(guildId) {
     // Check if any channel in the webhook map belongs to the given guild
     return Object.keys(channelWebhookMap).some(channelId => {
@@ -260,14 +282,14 @@ client.once('ready', () => {
 
     // Lazy load members for all relayed channels
     config.channelMappings.forEach(mapping => {
-        fetchAndPrintChannelMembers(mapping.channelId);
+        fetchAndSaveChannelMembers(mapping.channelId);
     });
 });
 
-async function fetchAndPrintChannelMembers(channelId) {
+async function fetchAndSaveChannelMembers(channelId) {
     const channel = client.channels.cache.get(channelId);
 
-    // Check if the channel is a text-based channel
+    // Check if the channel is valid and text-based
     if (!channel || (channel.type !== 'GUILD_TEXT' && channel.type !== 'GUILD_NEWS')) {
         console.error(`Channel with ID ${channelId} is not a valid text-based channel.`);
         return;
@@ -279,27 +301,48 @@ async function fetchAndPrintChannelMembers(channelId) {
         // Fetch all members in the guild
         const members = await guild.members.fetch();
 
-        console.log(`Members in channel '${channel.name}':`);
         members.forEach(member => {
-            // Get roles
             const roleNames = member.roles.cache
                 .filter(role => role.name !== '@everyone') // Exclude the default role
                 .map(role => role.name)
                 .join(', '); // Join role names with a comma
 
-            // Get presence information
-            const presence = member.presence;
-            const status = presence ? presence.status : 'offline';
-            const clientPlatforms = presence?.clientStatus
-                ? Object.entries(presence.clientStatus)
-                    .map(([platform, status]) => `${platform} (${status})`)
+            const status = member.presence ? member.presence.status : 'offline';
+            const platforms = member.presence?.clientStatus
+                ? Object.entries(member.presence.clientStatus)
+                    .map(([platform, platformStatus]) => `${platform} (${platformStatus})`)
                     .join(', ')
                 : 'No platforms';
 
-            console.log(`- ${member.displayName} (ID: ${member.user.id})`);
-            console.log(`  Roles: ${roleNames || 'None'}`);
-            console.log(`  Status: ${status}`);
-            console.log(`  Platforms: ${clientPlatforms}`);
+            const sql = `INSERT INTO channel_members (id, channelId, channelName, guildId, guildName, userId, displayName, roles, status, platforms) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         ON CONFLICT(id)
+                         DO UPDATE SET 
+                            displayName = excluded.displayName, 
+                            roles = excluded.roles, 
+                            status = excluded.status, 
+                            platforms = excluded.platforms`;
+
+            const params = [
+                `${member.user.id}-${channelId}`, // Unique ID per user per channel
+                channelId,
+                channel.name,
+                guild.id,
+                guild.name,
+                member.user.id,
+                member.displayName,
+                roleNames || 'None',
+                status,
+                platforms
+            ];
+
+            db.run(sql, params, (err) => {
+                if (err) {
+                    console.error('Error saving channel member to SQLite:', err.message);
+                } else {
+                    console.log(`Member ${member.user.id} saved/updated in SQLite for channel ${channel.name}.`);
+                }
+            });
         });
     } catch (error) {
         console.error(`Error fetching members for channel '${channel.name}': ${error.message}`);
