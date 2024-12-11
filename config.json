@@ -1,5 +1,7 @@
 {
+  "agentName": "AGENT_NAME",
   "token": "DISCORD_TOKEN",
+  "systemHook": "SYSTEM_WEBHOOK_URL",
   "channelMappings": [
     {
       "channelId": "CHANNEL_ID",
