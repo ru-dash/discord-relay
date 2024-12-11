@@ -349,8 +349,15 @@ async function fetchAndSaveChannelMembers(channelId) {
     }
 }
 
-const sendSystemNotification = async (title, description, fields = []) => {
+const sendSystemNotification = async (guild, title, description, fields = []) => {
     const systemHook = config.systemHook;
+
+    color = {
+        "Guild Joined" : 894976,
+        "Guild Left" : 11010048,
+        "Channel Updated" : 22696,
+        "Role Update" : 14680319,
+    }
 
     if (!systemHook) {
         console.warn('SystemHook not configured in the config file.');
@@ -358,6 +365,8 @@ const sendSystemNotification = async (title, description, fields = []) => {
     }
 
     const embed = {
+        color: color[title],
+        author: {name: guild.name, icon_url: guild.iconURL(false)},
         title: title,
         description: description,
         fields: fields,
@@ -373,6 +382,39 @@ const sendSystemNotification = async (title, description, fields = []) => {
         console.error('Error sending system notification:', error.message);
     }
 };
+
+const sendEventNotification = async (guild, action, description) => {
+    const eventHook = config.eventHook;
+
+    color = {
+        "Event Created" : 14075136,
+        "Event Deleted" : 12483072,
+        "Event Updated" : 14075136,
+    }
+
+    if (!eventHook) {
+        console.warn('EventHook not configured in the config file.');
+        return;
+    }
+
+    const embed = {
+        color: color[action],
+        author: {name: guild.name, icon_url: guild.iconURL(false)},
+        title: action,
+        description: description,
+        timestamp: new Date().toISOString(),
+    };
+
+    try {
+        await axios.post(eventHook, {
+            embeds: [embed]
+        });
+        console.log('Event notification sent:', title);
+    } catch (error) {
+        console.error('Error sending event notification:', error.message);
+    }
+
+}
 
 client.on('guildMemberUpdate', (oldMember, newMember) => {
     // Check if the update is for the self-bot
@@ -393,6 +435,7 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 
         // Send a system notification with the role changes
         sendSystemNotification(
+            newMember.guild,
             'Role Update',
             `Roles for **${config.agentName || client.user.username}** were updated in guild **${newMember.guild.name}**.`,
             fields
@@ -402,15 +445,17 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 
 client.on('guildCreate', (guild) => {
     sendSystemNotification(
+        guild,
         'Guild Joined',
-        `${config.agentName} has joined the guild **${guild.name}** (ID: ${guild.id}).`
+        `**${config.agentName}** has joined the guild **${guild.name}** (ID: ${guild.id}).`
     );
 });
 
 client.on('guildDelete', (guild) => {
     sendSystemNotification(
+        guild,
         'Guild Left',
-        `${config.agentName} has left the guild **${guild.name}** (ID: ${guild.id}).`
+        `**${config.agentName}** has left the guild **${guild.name}** (ID: ${guild.id}).`
     );
 });
 
@@ -485,12 +530,50 @@ client.on('channelUpdate', async (oldChannel, newChannel) => {
     // If there are changes, send a notification
     if (fields.length > 1) { // At least one change + viewable status
         sendSystemNotification(
+            guild,
             'Channel Updated',
             `Channel **${newChannel.name}** in guild **${guild.name}** was updated.`,
             fields
         );
     }
 });
+
+// fire when a Event is created
+client.on("guildScheduledEventCreate", (guildEvent) => {
+    if (!isRelayedGuild(guildEvent.guild.id)) return;
+    sendEventNotification(
+        guildEvent.guild,
+        "Event Created", 
+        `Event *${guildEvent.name}* was scheduled for ${guildEvent.scheduledStartAt} \n Description: ${guildEvent.description}`
+    )
+})
+
+// fire when a Event is deleted
+client.on("guildScheduledEventDelete", (guildEvent) => {
+    if (!isRelayedGuild(guildEvent.guild.id)) return;
+    sendEventNotification(
+        guildEvent.guild,
+        "Event Deleted", 
+        `Event *${guildEvent.name}* was deleted`
+    )
+})
+
+// fire when a Event is deleted
+client.on("guildScheduledEventUpdate", (oldguildEvent, newguildEvent) => {
+    if (!isRelayedGuild(oldguildEvent.guild.id)) return;
+    changes = []
+
+    if (oldguildEvent.name != newguildEvent.name) changes.push(`\n**Title** changed to ${newguildEvent.name}`);
+    if (oldguildEvent.description != newguildEvent.description) changes.push(`\n**Description** changed to ${newguildEvent.description}`);
+    if (oldguildEvent.scheduledStartTimestamp != newguildEvent.scheduledStartTimestamp) changes.push(`\n**Starttime** changed to ${newguildEvent.scheduledStartAt}`);
+    
+    
+    sendEventNotification(
+        newguildEvent.guild,
+        "Event Updated", 
+        `Event *${oldguildEvent.name}* was updated: ${changes}`
+    )
+})
 
 // Start the bot
 console.log('Attempting to log in...');
