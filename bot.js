@@ -46,17 +46,17 @@ db.run(
 
 db.run(
     `CREATE TABLE IF NOT EXISTS channel_members (
-        id TEXT PRIMARY KEY,
-        channelId TEXT,
-        channelName TEXT,
-        guildId TEXT,
-        guildName TEXT,
-        userId TEXT,
-        displayName TEXT,
-        roles TEXT,
-        status TEXT,
-        platforms TEXT
-    )`,
+                                                    id TEXT PRIMARY KEY,
+                                                    channelId TEXT,
+                                                    channelName TEXT,
+                                                    guildId TEXT,
+                                                    guildName TEXT,
+                                                    userId TEXT,
+                                                    displayName TEXT,
+                                                    roles TEXT,
+                                                    status TEXT,
+                                                    platforms TEXT
+     )`,
     (err) => {
         if (err) {
             console.error('Error creating table:', err.message);
@@ -82,15 +82,15 @@ function saveMessageToDB(message) {
     const channelName = message.channel.name;
     const authorDisplayName = message.member ? message.member.displayName : message.author.username;
 
-    const sql = `INSERT INTO messages (id, channelId, channelName, guildId, guildName, authorId, authorDisplayName, content, createdAt, updatedAt) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
-                 ON CONFLICT(id) 
-                 DO UPDATE SET 
-                    content = excluded.content, 
-                    updatedAt = excluded.updatedAt,
-                    guildName = excluded.guildName,
-                    channelName = excluded.channelName,
-                    authorDisplayName = excluded.authorDisplayName`;
+    const sql = `INSERT INTO messages (id, channelId, channelName, guildId, guildName, authorId, authorDisplayName, content, createdAt, updatedAt)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(id) 
+                 DO UPDATE SET
+        content = excluded.content,
+                                             updatedAt = excluded.updatedAt,
+                                             guildName = excluded.guildName,
+                                             channelName = excluded.channelName,
+                                             authorDisplayName = excluded.authorDisplayName`;
 
     const params = [
         message.id,
@@ -314,14 +314,14 @@ async function fetchAndSaveChannelMembers(channelId) {
                     .join(', ')
                 : 'No platforms';
 
-            const sql = `INSERT INTO channel_members (id, channelId, channelName, guildId, guildName, userId, displayName, roles, status, platforms) 
+            const sql = `INSERT INTO channel_members (id, channelId, channelName, guildId, guildName, userId, displayName, roles, status, platforms)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                         ON CONFLICT(id)
-                         DO UPDATE SET 
-                            displayName = excluded.displayName, 
-                            roles = excluded.roles, 
-                            status = excluded.status, 
-                            platforms = excluded.platforms`;
+                             ON CONFLICT(id)
+                         DO UPDATE SET
+                displayName = excluded.displayName,
+                                                             roles = excluded.roles,
+                                                             status = excluded.status,
+                                                             platforms = excluded.platforms`;
 
             const params = [
                 `${member.user.id}-${channelId}`, // Unique ID per user per channel
@@ -543,7 +543,7 @@ client.on("guildScheduledEventCreate", (guildEvent) => {
     if (!isRelayedGuild(guildEvent.guild.id)) return;
     sendEventNotification(
         guildEvent.guild,
-        "Event Created", 
+        "Event Created",
         `Event *${guildEvent.name}* was scheduled for ${guildEvent.scheduledStartAt} \n Description: ${guildEvent.description}`
     )
 })
@@ -553,7 +553,7 @@ client.on("guildScheduledEventDelete", (guildEvent) => {
     if (!isRelayedGuild(guildEvent.guild.id)) return;
     sendEventNotification(
         guildEvent.guild,
-        "Event Deleted", 
+        "Event Deleted",
         `Event *${guildEvent.name}* was deleted`
     )
 })
@@ -566,11 +566,11 @@ client.on("guildScheduledEventUpdate", (oldguildEvent, newguildEvent) => {
     if (oldguildEvent.name != newguildEvent.name) changes.push(`\n**Title** changed to ${newguildEvent.name}`);
     if (oldguildEvent.description != newguildEvent.description) changes.push(`\n**Description** changed to ${newguildEvent.description}`);
     if (oldguildEvent.scheduledStartTimestamp != newguildEvent.scheduledStartTimestamp) changes.push(`\n**Starttime** changed to ${newguildEvent.scheduledStartAt}`);
-    
-    
+
+
     sendEventNotification(
         newguildEvent.guild,
-        "Event Updated", 
+        "Event Updated",
         `Event *${oldguildEvent.name}* was updated: ${changes}`
     )
 })
