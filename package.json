@@ -14,9 +14,8 @@
     "axios": "^1.7.7",
     "discord.js-selfbot-v13": "^3.4.0",
     "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-basic-auth": "^1.2.1",
     "sqlite3": "^5.1.7"
-  },
-  "devDependencies": {
-    "electron": "^16.0.0"
   }
 }
