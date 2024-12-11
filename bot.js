@@ -349,6 +349,149 @@ async function fetchAndSaveChannelMembers(channelId) {
     }
 }
 
+const sendSystemNotification = async (title, description, fields = []) => {
+    const systemHook = config.systemHook;
+
+    if (!systemHook) {
+        console.warn('SystemHook not configured in the config file.');
+        return;
+    }
+
+    const embed = {
+        title: title,
+        description: description,
+        fields: fields,
+        timestamp: new Date().toISOString(),
+    };
+
+    try {
+        await axios.post(systemHook, {
+            embeds: [embed]
+        });
+        console.log('System notification sent:', title);
+    } catch (error) {
+        console.error('Error sending system notification:', error.message);
+    }
+};
+
+client.on('guildMemberUpdate', (oldMember, newMember) => {
+    // Check if the update is for the self-bot
+    if (newMember.user.id !== client.user.id) return;
+
+    // Compare roles
+    if (!oldMember.roles.cache.equals(newMember.roles.cache)) {
+        const addedRoles = newMember.roles.cache.filter(role => !oldMember.roles.cache.has(role.id));
+        const removedRoles = oldMember.roles.cache.filter(role => !newMember.roles.cache.has(role.id));
+
+        let fields = [];
+        if (addedRoles.size > 0) {
+            fields.push({ name: 'Added Roles', value: addedRoles.map(role => role.name).join(', '), inline: true });
+        }
+        if (removedRoles.size > 0) {
+            fields.push({ name: 'Removed Roles', value: removedRoles.map(role => role.name).join(', '), inline: true });
+        }
+
+        // Send a system notification with the role changes
+        sendSystemNotification(
+            'Role Update',
+            `Roles for **${config.agentName || client.user.username}** were updated in guild **${newMember.guild.name}**.`,
+            fields
+        );
+    }
+});
+
+client.on('guildCreate', (guild) => {
+    sendSystemNotification(
+        'Guild Joined',
+        `${config.agentName} has joined the guild **${guild.name}** (ID: ${guild.id}).`
+    );
+});
+
+client.on('guildDelete', (guild) => {
+    sendSystemNotification(
+        'Guild Left',
+        `${config.agentName} has left the guild **${guild.name}** (ID: ${guild.id}).`
+    );
+});
+
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+    // Ensure the guild is being relayed
+    if (!isRelayedGuild(newChannel.guild.id)) return;
+
+    const guild = newChannel.guild;
+    const fields = [];
+
+    // Compare permission overwrites
+    const oldPermissions = oldChannel.permissionOverwrites.cache;
+    const newPermissions = newChannel.permissionOverwrites.cache;
+
+    if (!oldPermissions.equals(newPermissions)) {
+        const addedPermissions = newPermissions.filter(
+            overwrite => !oldPermissions.has(overwrite.id)
+        );
+        const removedPermissions = oldPermissions.filter(
+            overwrite => !newPermissions.has(overwrite.id)
+        );
+
+        if (addedPermissions.size > 0) {
+            const added = await Promise.all(
+                addedPermissions.map(async (overwrite) => {
+                    if (overwrite.type === 'role') {
+                        const role = guild.roles.cache.get(overwrite.id) || await guild.roles.fetch(overwrite.id);
+                        return `Role: ${role ? role.name : `Unknown (${overwrite.id})`}`;
+                    } else if (overwrite.type === 'member') {
+                        const member = guild.members.cache.get(overwrite.id) || await guild.members.fetch(overwrite.id).catch(() => null);
+                        return `User: ${member ? member.displayName : `Unknown (${overwrite.id})`}`;
+                    }
+                })
+            );
+            fields.push({
+                name: 'Added Permissions',
+                value: added.filter(Boolean).join('\n'),
+                inline: false
+            });
+        }
+
+        if (removedPermissions.size > 0) {
+            const removed = await Promise.all(
+                removedPermissions.map(async (overwrite) => {
+                    if (overwrite.type === 'role') {
+                        const role = guild.roles.cache.get(overwrite.id) || await guild.roles.fetch(overwrite.id);
+                        return `Role: ${role ? role.name : `Unknown (${overwrite.id})`}`;
+                    } else if (overwrite.type === 'member') {
+                        const member = guild.members.cache.get(overwrite.id) || await guild.members.fetch(overwrite.id).catch(() => null);
+                        return `User: ${member ? member.displayName : `Unknown (${overwrite.id})`}`;
+                    }
+                })
+            );
+            fields.push({
+                name: 'Removed Permissions',
+                value: removed.filter(Boolean).join('\n'),
+                inline: false
+            });
+        }
+    }
+
+    // Check for viewable status changes
+    const wasViewable = oldChannel.viewable;
+    const isViewable = newChannel.viewable;
+
+    fields.push({
+        name: 'Viewable Status',
+        value: `**Before:** ${wasViewable ? 'Yes' : 'No'}\n**After:** ${isViewable ? 'Yes' : 'No'}`,
+        inline: false
+    });
+
+    // If there are changes, send a notification
+    if (fields.length > 1) { // At least one change + viewable status
+        sendSystemNotification(
+            'Channel Updated',
+            `Channel **${newChannel.name}** in guild **${guild.name}** was updated.`,
+            fields
+        );
+    }
+});
+
 // Start the bot
 console.log('Attempting to log in...');
 try {
