@@ -3,8 +3,11 @@ This project was created to relay messages from hostile discords to discord webh
 
 # Features
 * Relay messages from specific channel_ids to (discord) webhooks.
+* Relay events from relayed channel_ids to (discord) webhooks.
+* Relays role updates and guild join/leave for the bot. As well as channel updates in relayed channel id guilds.
 * Preventing abusing embedding images to detect channels being relayed.
 * Mimics Desktop Client.
+* Lazy loads Member List and saves messages to SQL for later use.
 
 # Setup Guide
 Download Node.js from the official website.
