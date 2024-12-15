@@ -92,6 +92,11 @@ function saveMessageToDB(message) {
                                              channelName = excluded.channelName,
                                              authorDisplayName = excluded.authorDisplayName`;
 
+    const sanitizedContent = sanitizeHTML(message.content, {
+        allowedTags: [],
+        allowedAttributes: {}
+    });
+
     const params = [
         message.id,
         message.channel.id,
@@ -100,7 +105,7 @@ function saveMessageToDB(message) {
         guildName,
         message.author.id,
         authorDisplayName,
-        message.content || null,
+        sanitizedContent || null,
         message.createdTimestamp,
         message.editedTimestamp || null,
     ];
