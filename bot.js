@@ -92,7 +92,7 @@ function saveMessageToDB(message) {
                                              channelName = excluded.channelName,
                                              authorDisplayName = excluded.authorDisplayName`;
 
-    const sanitizedContent = sanitizeHTML(message.content, {
+    const sanitizedContent = sanitizeMessage(message.content, {
         allowedTags: [],
         allowedAttributes: {}
     });
