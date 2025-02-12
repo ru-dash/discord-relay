@@ -170,6 +170,12 @@ const resolveMentions = (message) => {
         return role ? `@${role.name}` : match;
     });
 
+    const channelMentionRegex = /<#(\d+)>/g;
+    content = content.replace(channelMentionRegex, (match, channelId) => {
+        const channel = message.guild.channels.cache.get(channelId);
+        return channel ? `#${channel.name}` : match;
+    });
+
     return content;
 };
 
