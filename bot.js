@@ -5,12 +5,12 @@ const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
 const sqlite3 = require('sqlite3').verbose();
-const translate = require('translate-google-api')
-const LanguageDetect = require('languagedetect');
-const lngDetector = new LanguageDetect();
 
 const configPath = process.argv[2] || path.join(__dirname, 'config.json'); // Use a default path if no argument is provided
 let config = { token: '', channelMappings: [] };
+
+// Load config
+const defaultConfig = { token: '', channelMappings: [] };
 
 // Initialize SQLite Database
 const db = new sqlite3.Database('./messages.db', (err) => {
@@ -46,17 +46,17 @@ db.run(
 
 db.run(
     `CREATE TABLE IF NOT EXISTS channel_members (
-        id TEXT PRIMARY KEY,
-        channelId TEXT,
-        channelName TEXT,
-        guildId TEXT,
-        guildName TEXT,
-        userId TEXT,
-        displayName TEXT,
-        roles TEXT,
-        status TEXT,
-        platforms TEXT
-    )`,
+                                                    id TEXT PRIMARY KEY,
+                                                    channelId TEXT,
+                                                    channelName TEXT,
+                                                    guildId TEXT,
+                                                    guildName TEXT,
+                                                    userId TEXT,
+                                                    displayName TEXT,
+                                                    roles TEXT,
+                                                    status TEXT,
+                                                    platforms TEXT
+     )`,
     (err) => {
         if (err) {
             console.error('Error creating table:', err.message);
@@ -82,15 +82,20 @@ function saveMessageToDB(message) {
     const channelName = message.channel.name;
     const authorDisplayName = message.member ? message.member.displayName : message.author.username;
 
-    const sql = `INSERT INTO messages (id, channelId, channelName, guildId, guildName, authorId, authorDisplayName, content, createdAt, updatedAt) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
-                 ON CONFLICT(id) 
-                 DO UPDATE SET 
-                    content = excluded.content, 
-                    updatedAt = excluded.updatedAt,
-                    guildName = excluded.guildName,
-                    channelName = excluded.channelName,
-                    authorDisplayName = excluded.authorDisplayName`;
+    const sql = `INSERT INTO messages (id, channelId, channelName, guildId, guildName, authorId, authorDisplayName, content, createdAt, updatedAt)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(id) 
+                 DO UPDATE SET
+        content = excluded.content,
+                                             updatedAt = excluded.updatedAt,
+                                             guildName = excluded.guildName,
+                                             channelName = excluded.channelName,
+                                             authorDisplayName = excluded.authorDisplayName`;
+
+    const sanitizedContent = sanitizeMessage(message.content, {
+        allowedTags: [],
+        allowedAttributes: {}
+    });
 
     const params = [
         message.id,
@@ -100,7 +105,7 @@ function saveMessageToDB(message) {
         guildName,
         message.author.id,
         authorDisplayName,
-        message.content || null,
+        sanitizedContent || null,
         message.createdTimestamp,
         message.editedTimestamp || null,
     ];
@@ -170,12 +175,6 @@ const resolveMentions = (message) => {
         return role ? `@${role.name}` : match;
     });
 
-    const channelMentionRegex = /<#(\d+)>/g;
-    content = content.replace(channelMentionRegex, (match, channelId) => {
-        const channel = message.guild.channels.cache.get(channelId);
-        return channel ? `#${channel.name}` : match;
-    });
-
     return content;
 };
 
@@ -196,10 +195,6 @@ function sanitizeEmbeds(embeds) {
     }));
 }
 
-
-
-
-
 const sendToWebhook = async (message, isUpdate = false) => {
     const channelId = message.channel.id;
     const webhookUrl = channelWebhookMap[channelId];
@@ -210,8 +205,7 @@ const sendToWebhook = async (message, isUpdate = false) => {
     }
 
     const displayName = message.member ? message.member.displayName : message.author.username;
-    const translatedContent = await translate(resolveMentions(message), {to: config.relay_language});
-    const sanitizedContent = sanitizeMessage(""+translatedContent+"\n-# translated from "+lngDetector.detect(resolveMentions(message), 1)[0][0]+""); // Resolve and sanitize message content
+    const sanitizedContent = sanitizeMessage(resolveMentions(message)); // Resolve and sanitize message content
 
     const messageData = {
         username: displayName + " #" + message.channel.name,
@@ -262,11 +256,6 @@ const sendToWebhook = async (message, isUpdate = false) => {
         console.error(`Error sending message to webhook: ${error.message}`);
     }
 };
-
-
-
-
-
 
 // Listen for new messages
 client.on('messageCreate', message => {
@@ -330,14 +319,14 @@ async function fetchAndSaveChannelMembers(channelId) {
                     .join(', ')
                 : 'No platforms';
 
-            const sql = `INSERT INTO channel_members (id, channelId, channelName, guildId, guildName, userId, displayName, roles, status, platforms) 
+            const sql = `INSERT INTO channel_members (id, channelId, channelName, guildId, guildName, userId, displayName, roles, status, platforms)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                         ON CONFLICT(id)
-                         DO UPDATE SET 
-                            displayName = excluded.displayName, 
-                            roles = excluded.roles, 
-                            status = excluded.status, 
-                            platforms = excluded.platforms`;
+                             ON CONFLICT(id)
+                         DO UPDATE SET
+                displayName = excluded.displayName,
+                                                             roles = excluded.roles,
+                                                             status = excluded.status,
+                                                             platforms = excluded.platforms`;
 
             const params = [
                 `${member.user.id}-${channelId}`, // Unique ID per user per channel
@@ -559,7 +548,7 @@ client.on("guildScheduledEventCreate", (guildEvent) => {
     if (!isRelayedGuild(guildEvent.guild.id)) return;
     sendEventNotification(
         guildEvent.guild,
-        "Event Created", 
+        "Event Created",
         `Event *${guildEvent.name}* was scheduled for ${guildEvent.scheduledStartAt} \n Description: ${guildEvent.description}`
     )
 })
@@ -569,7 +558,7 @@ client.on("guildScheduledEventDelete", (guildEvent) => {
     if (!isRelayedGuild(guildEvent.guild.id)) return;
     sendEventNotification(
         guildEvent.guild,
-        "Event Deleted", 
+        "Event Deleted",
         `Event *${guildEvent.name}* was deleted`
     )
 })
@@ -582,11 +571,11 @@ client.on("guildScheduledEventUpdate", (oldguildEvent, newguildEvent) => {
     if (oldguildEvent.name != newguildEvent.name) changes.push(`\n**Title** changed to ${newguildEvent.name}`);
     if (oldguildEvent.description != newguildEvent.description) changes.push(`\n**Description** changed to ${newguildEvent.description}`);
     if (oldguildEvent.scheduledStartTimestamp != newguildEvent.scheduledStartTimestamp) changes.push(`\n**Starttime** changed to ${newguildEvent.scheduledStartAt}`);
-    
-    
+
+
     sendEventNotification(
         newguildEvent.guild,
-        "Event Updated", 
+        "Event Updated",
         `Event *${oldguildEvent.name}* was updated: ${changes}`
     )
 })
