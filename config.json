@@ -3,7 +3,6 @@
   "token": "DISCORD_TOKEN",
   "systemHook": "SYSTEM_WEBHOOK_URL",
   "eventHook": "EVENT_WEBHOOK_URL",
-  "relay-language": "en",
   "channelMappings": [
     {
       "channelId": "CHANNEL_ID",
