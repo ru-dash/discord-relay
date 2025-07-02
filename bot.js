@@ -92,11 +92,6 @@ function saveMessageToDB(message) {
                                              channelName = excluded.channelName,
                                              authorDisplayName = excluded.authorDisplayName`;
 
-    const sanitizedContent = sanitizeMessage(message.content, {
-        allowedTags: [],
-        allowedAttributes: {}
-    });
-
     const params = [
         message.id,
         message.channel.id,
@@ -105,7 +100,7 @@ function saveMessageToDB(message) {
         guildName,
         message.author.id,
         authorDisplayName,
-        sanitizedContent || null,
+        message.content || null,
         message.createdTimestamp,
         message.editedTimestamp || null,
     ];
@@ -466,6 +461,11 @@ client.on('guildDelete', (guild) => {
 
 client.on('channelUpdate', async (oldChannel, newChannel) => {
     // Ensure the guild is being relayed
+    if (!newChannel.guild) {
+        console.warn(`channelUpdate: newChannel.guild is undefined (channel ID: ${newChannel.id})`);
+        return;
+    }
+	
     if (!isRelayedGuild(newChannel.guild.id)) return;
 
     const guild = newChannel.guild;
