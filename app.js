@@ -40,14 +40,23 @@ class DiscordRelayBot {
         // Initialize components
         this.components.performanceStats = new PerformanceStats();
         this.components.configManager = new ConfigManager(process.argv[2]);
-        this.components.databaseManager = new DatabaseManager();
+        
+        // Load configuration first to get database settings
+        this.config = this.components.configManager.loadConfig();
+        
+        // Initialize hybrid database manager with configuration
+        this.components.databaseManager = new DatabaseManager({
+            instanceName: this.config.instanceName || 'default',
+            pg: this.config.database?.postgresql || {},
+            redis: this.config.database?.redis || {}
+        });
         this.components.webhookManager = new WebhookManager();
         this.components.cacheManager = new CacheManager();
         this.components.shutdownManager = new ShutdownManager();
         this.components.autoUpdater = new AutoUpdater();
         
-        // Load configuration
-        this.config = this.components.configManager.loadConfig();
+        // Auto-restart is always enabled with smart error detection
+        this.components.shutdownManager.configureRestart();
         
         // Initialize cache manager with performance stats
         this.components.cacheManager.initialize(this.components.performanceStats);
@@ -182,7 +191,9 @@ class DiscordRelayBot {
 
         // Ready event
         client.once('ready', () => {
-            console.log(`Logged in as ${client.user.tag}!`);
+            const instanceName = this.config.instanceName || 'default';
+            const agentName = this.config.agentName || 'Discord Relay Bot';
+            console.log(`[${instanceName}] ${agentName} logged in as ${client.user.tag}!`);
             
             setTimeout(() => {
                 this.initializeAfterReady();
@@ -214,10 +225,70 @@ class DiscordRelayBot {
             );
         });
         
-        console.log('Bot initialization completed - ready to relay messages');
+        console.log(`[${this.config.instanceName || 'default'}] Bot initialization completed - ready to relay messages`);
         
         // Start periodic update checks
         this.components.autoUpdater.startPeriodicChecks();
+        
+        // Start periodic member synchronization (every 4 hours)
+        this.startPeriodicMemberSync();
+    }
+
+    /**
+     * Start periodic member synchronization
+     */
+    startPeriodicMemberSync() {
+        const syncIntervalHours = 4; // Sync every 4 hours
+        const syncIntervalMs = syncIntervalHours * 60 * 60 * 1000;
+        
+        console.log(`[${this.config.instanceName || 'default'}] Starting periodic member sync (every ${syncIntervalHours} hours)`);
+        
+        this.memberSyncInterval = setInterval(async () => {
+            try {
+                console.log(`[${this.config.instanceName || 'default'}] Starting scheduled member synchronization...`);
+                
+                let totalSynced = 0;
+                
+                // Sync members for each configured channel
+                for (const mapping of this.config.channelMappings) {
+                    try {
+                        const channel = this.components.client.channels.cache.get(mapping.channelId);
+                        if (channel) {
+                            console.log(`[${this.config.instanceName || 'default'}] Syncing members for channel: ${channel.name}`);
+                            
+                            await this.components.memberManager.fetchAndSaveChannelMembers(
+                                mapping.channelId,
+                                this.components.client,
+                                true // isPeriodicSync = true
+                            );
+                            
+                            totalSynced++;
+                            
+                            // Add a small delay between channels to avoid rate limits
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        } else {
+                            console.warn(`[${this.config.instanceName || 'default'}] Channel ${mapping.channelId} not found during member sync`);
+                        }
+                    } catch (error) {
+                        console.error(`[${this.config.instanceName || 'default'}] Error syncing members for channel ${mapping.channelId}:`, error.message);
+                    }
+                }
+                
+                console.log(`[${this.config.instanceName || 'default'}] Member synchronization completed - synced ${totalSynced} channels`);
+                
+                // Update performance stats if available
+                if (this.components.performanceStats) {
+                    this.components.performanceStats.memberSyncs = (this.components.performanceStats.memberSyncs || 0) + 1;
+                    this.components.performanceStats.lastMemberSync = Date.now();
+                }
+                
+            } catch (error) {
+                console.error(`[${this.config.instanceName || 'default'}] Error during periodic member sync:`, error.message);
+            }
+        }, syncIntervalMs);
+        
+        // Store interval ID for cleanup
+        this.components.memberSyncInterval = this.memberSyncInterval;
     }
 
     /**
@@ -225,8 +296,11 @@ class DiscordRelayBot {
      */
     async start() {
         try {
-            // Initialize database
-            await this.components.databaseManager.initialize(this.components.performanceStats);
+            // Initialize database with cache manager
+            await this.components.databaseManager.initialize(
+                this.components.performanceStats,
+                this.components.cacheManager
+            );
             
             // Initialize webhook manager
             this.components.webhookManager.initialize(this.axiosInstance, this.components.performanceStats);
@@ -235,7 +309,7 @@ class DiscordRelayBot {
             this.setupClient();
             
             // Register components for graceful shutdown
-            this.components.shutdownManager.registerComponents(this.components);
+            this.components.shutdownManager.registerComponents(this.components, this.config);
             
             // Start the Discord client
             console.log('Attempting to log in...');
@@ -244,14 +318,26 @@ class DiscordRelayBot {
             
         } catch (error) {
             console.error(`Failed to start bot: ${error.message}`);
-            process.exit(1);
+            
+            // Check if this is a token-related error and handle appropriately
+            if (this.components?.shutdownManager) {
+                await this.components.shutdownManager.handleCrash('startup-failure', error);
+            } else {
+                process.exit(1);
+            }
         }
     }
 }
 
 // Start the bot
 const bot = new DiscordRelayBot();
-bot.start().catch(error => {
+bot.start().catch(async error => {
     console.error('Fatal error:', error);
-    process.exit(1);
+    
+    // Try to use shutdown manager if available for proper error handling
+    if (bot.components?.shutdownManager) {
+        await bot.components.shutdownManager.handleCrash('fatal-startup-error', error);
+    } else {
+        process.exit(1);
+    }
 });

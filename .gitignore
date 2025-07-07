@@ -1,14 +1,38 @@
-config.json
+# Configuration files (may contain sensitive tokens)
+configs/*
+
+# Dependencies
 node_modules/
+
+# Log files
 *.log
+logs/
+
+# Environment files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Temporary files
 *.tmp
 *.temp
+
+# IDE files
 .vscode/
 .idea/
+
+# Database files
 *.db
 *.db-shm
 *.db-wal
+databases/
+
+# Build files
 dist/
 build/
