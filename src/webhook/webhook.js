@@ -101,6 +101,7 @@ class WebhookManager {
         }
 
         console.log(`Webhook URL found, queuing message for ${message.author.username}`);
+        console.log(`Message author bot: ${message.author.bot}, webhookId: ${message.webhookId}, author system: ${message.author.system}`);
 
         // Queue the webhook request to respect rate limits
         this.webhookQueue.push(async () => {
@@ -111,10 +112,15 @@ class WebhookManager {
                 // Use redacted channel name if requested
                 const channelDisplay = redactChannelName ? '[redacted]' : message.channel.name;
 
+                // Check if this is a non-user message (bot, webhook, or system)
+                const isNonUser = message.author.bot || message.webhookId || message.author.system;
+                console.log(`Is non-user message: ${isNonUser}`);
+
                 const messageData = {
                     username: `${displayName} #${channelDisplay}`,
                     content: sanitizedContent,
-                    avatar_url: message.author.displayAvatarURL(),
+                    // Only include avatar for actual users, not bots/applications/webhooks
+                    avatar_url: isNonUser ? undefined : message.author.displayAvatarURL(),
                     embeds: message.embeds.length > 0 ? sanitizeEmbeds(message.embeds) : undefined,
                 };
 
