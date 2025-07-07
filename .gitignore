@@ -1,2 +1,14 @@
 config.json
-node_modules/*
+node_modules/
+*.log
+.env
+.DS_Store
+*.tmp
+*.temp
+.vscode/
+.idea/
+*.db
+*.db-shm
+*.db-wal
+dist/
+build/
