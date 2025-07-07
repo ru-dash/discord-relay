@@ -104,12 +104,6 @@ class MessageHandler {
         if (!this.cacheManager.isRelayedGuild(message.guild.id)) {
             return;
         }
-        
-        // Skip duplicate content
-        if (this.cacheManager.isDuplicateContent(message)) {
-            this.performanceStats.duplicatesSkipped++;
-            return;
-        }
 
         // Process webhook and database operations in parallel
         Promise.allSettled([
