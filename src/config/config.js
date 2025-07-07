@@ -4,8 +4,24 @@ const path = require('path');
 class ConfigManager {
     constructor(configPath) {
         this.configPath = configPath || path.join(__dirname, '../../config.json');
-        this.defaultConfig = { token: '', channelMappings: [] };
-        this.config = { token: '', channelMappings: [] };
+        this.defaultConfig = { 
+            agentName: 'Discord Relay Bot',
+            token: '', 
+            systemHook: '',
+            eventHook: '',
+            channelMappings: [],
+            instanceName: 'default',
+            dbPath: './messages.db'
+        };
+        this.config = { 
+            agentName: 'Discord Relay Bot',
+            token: '', 
+            systemHook: '',
+            eventHook: '',
+            channelMappings: [],
+            instanceName: 'default',
+            dbPath: './messages.db'
+        };
     }
 
     /**
@@ -26,6 +42,18 @@ class ConfigManager {
                 throw new Error(`Invalid mapping at index ${index}: missing channelId or webhookUrl`);
             }
         });
+        
+        // Set default values for optional fields
+        if (!config.agentName) {
+            config.agentName = 'Discord Relay Bot';
+        }
+        if (!config.instanceName) {
+            config.instanceName = 'default';
+        }
+        if (!config.dbPath) {
+            config.dbPath = './messages.db';
+        }
+        
         return true;
     }
 
@@ -70,6 +98,30 @@ class ConfigManager {
             channelWebhookMap.set(mapping.channelId, mapping.webhookUrl);
         });
         return channelWebhookMap;
+    }
+
+    /**
+     * Get database path from configuration
+     * @returns {string} - Database file path
+     */
+    getDatabasePath() {
+        return this.config.dbPath || './messages.db';
+    }
+
+    /**
+     * Get instance name from configuration
+     * @returns {string} - Instance name
+     */
+    getInstanceName() {
+        return this.config.instanceName || 'default';
+    }
+
+    /**
+     * Get agent name from configuration
+     * @returns {string} - Agent name
+     */
+    getAgentName() {
+        return this.config.agentName || 'Discord Relay Bot';
     }
 }
 

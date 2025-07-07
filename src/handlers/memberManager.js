@@ -9,8 +9,9 @@ class MemberManager {
      * Fetch and save channel members to database
      * @param {string} channelId - Channel ID
      * @param {Object} client - Discord client
+     * @param {boolean} isPeriodicSync - Whether this is a periodic sync (for logging)
      */
-    async fetchAndSaveChannelMembers(channelId, client) {
+    async fetchAndSaveChannelMembers(channelId, client, isPeriodicSync = false) {
         const channel = client.channels.cache.get(channelId);
 
         // Check if the channel is valid and text-based
@@ -20,8 +21,11 @@ class MemberManager {
         }
 
         const guild = channel.guild;
+        const syncType = isPeriodicSync ? 'periodic sync' : 'initial fetch';
 
         try {
+            const startTime = Date.now();
+            
             // Fetch all members in the guild
             const members = await guild.members.fetch();
             const memberBatch = [];
@@ -34,9 +38,15 @@ class MemberManager {
             // Batch insert all members
             if (memberBatch.length > 0) {
                 await this.databaseManager.saveMemberBatch(memberBatch);
+                
+                const duration = Date.now() - startTime;
+                console.log(`[${syncType}] Saved ${memberBatch.length} members for channel '${channel.name}' in ${duration}ms`);
+            } else {
+                console.log(`[${syncType}] No members found for channel '${channel.name}'`);
             }
         } catch (error) {
-            console.error(`Error fetching members for channel '${channel.name}': ${error.message}`);
+            console.error(`Error fetching members for channel '${channel.name}' (${syncType}): ${error.message}`);
+            throw error; // Re-throw for periodic sync error handling
         }
     }
 

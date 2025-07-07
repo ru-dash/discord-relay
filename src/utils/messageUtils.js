@@ -105,15 +105,13 @@ class MessageUtils {
     static createMemberData(member, channelId, channelName) {
         const roleNames = member.roles.cache
             .filter(role => role.name !== '@everyone')
-            .map(role => role.name)
-            .join(', ');
+            .map(role => role.name);
 
         const status = member.presence ? member.presence.status : 'offline';
         const platforms = member.presence?.clientStatus
             ? Object.entries(member.presence.clientStatus)
                 .map(([platform, platformStatus]) => `${platform} (${platformStatus})`)
-                .join(', ')
-            : 'No platforms';
+            : [];
 
         return {
             id: `${member.user.id}-${channelId}`,
@@ -123,9 +121,9 @@ class MessageUtils {
             guildName: member.guild.name,
             userId: member.user.id,
             displayName: member.displayName,
-            roles: roleNames || 'None',
+            roles: roleNames, // Now returns array instead of string
             status: status,
-            platforms: platforms
+            platforms: platforms // Now returns array instead of string
         };
     }
 }
