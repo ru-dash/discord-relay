@@ -1,12 +1,11 @@
 {
-  "agentName": "AGENT_NAME",
-  "token": "DISCORD_TOKEN",
-  "systemHook": "SYSTEM_WEBHOOK_URL",
-  "eventHook": "EVENT_WEBHOOK_URL",
+  "botName": "test-bot",
+  "token": "YOUR_BOT_TOKEN_HERE",
+  "eventHook": "https://discord.com/api/webhooks/YOUR_EVENT_WEBHOOK_HERE",
   "channelMappings": [
     {
-      "channelId": "CHANNEL_ID",
-      "webhookUrl": "WEBHOOK_URL"
+      "channelId": "CHANNEL_ID_TO_MONITOR",
+      "webhookUrl": "https://discord.com/api/webhooks/YOUR_CHANNEL_WEBHOOK_HERE"
     }
   ]
 }
