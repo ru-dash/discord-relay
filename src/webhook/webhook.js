@@ -1,0 +1,212 @@
+const axios = require('axios');
+const FormData = require('form-data');
+
+class WebhookManager {
+    constructor() {
+        this.webhookQueue = [];
+        this.MAX_WEBHOOK_REQUESTS_PER_SECOND = 12;
+        this.WEBHOOK_RATE_LIMIT_WINDOW = 1000;
+        this.WEBHOOK_BURST_LIMIT = 20;
+        this.webhookRequestCount = 0;
+        this.webhookBurstCount = 0;
+        this.webhookRateLimitReset = Date.now() + this.WEBHOOK_RATE_LIMIT_WINDOW;
+        this.webhookResponseCache = new WeakMap();
+        this.messageMappings = new Map();
+        this.MAX_MESSAGE_MAPPINGS = 5000;
+        this.performanceStats = null;
+        this.axiosInstance = null;
+
+        // Start processing queue
+        setInterval(() => this.processWebhookQueue(), 50);
+        
+        // Cleanup message mappings every 15 minutes
+        setInterval(() => this.cleanupMessageMappings(), 15 * 60 * 1000);
+    }
+
+    /**
+     * Initialize webhook manager
+     * @param {Object} axiosInstance - Configured axios instance
+     * @param {Object} performanceStats - Performance statistics object
+     */
+    initialize(axiosInstance, performanceStats) {
+        this.axiosInstance = axiosInstance;
+        this.performanceStats = performanceStats;
+    }
+
+    /**
+     * Process webhook queue with rate limiting
+     */
+    async processWebhookQueue() {
+        if (this.webhookQueue.length === 0) return;
+        
+        const now = Date.now();
+        
+        // Reset rate limit window if needed
+        if (now >= this.webhookRateLimitReset) {
+            this.webhookRequestCount = 0;
+            this.webhookBurstCount = Math.max(0, this.webhookBurstCount - 5);
+            this.webhookRateLimitReset = now + this.WEBHOOK_RATE_LIMIT_WINDOW;
+        }
+        
+        // Calculate available requests (considering burst)
+        const availableRequests = Math.min(
+            this.webhookQueue.length,
+            this.MAX_WEBHOOK_REQUESTS_PER_SECOND - this.webhookRequestCount,
+            this.WEBHOOK_BURST_LIMIT - this.webhookBurstCount
+        );
+        
+        if (availableRequests <= 0) return;
+        
+        // Process requests in parallel batches
+        const requestBatch = this.webhookQueue.splice(0, availableRequests);
+        this.webhookRequestCount += requestBatch.length;
+        this.webhookBurstCount += requestBatch.length;
+        
+        // Process up to 3 requests in parallel
+        const PARALLEL_LIMIT = 3;
+        for (let i = 0; i < requestBatch.length; i += PARALLEL_LIMIT) {
+            const batch = requestBatch.slice(i, i + PARALLEL_LIMIT);
+            await Promise.allSettled(batch.map(request => request()));
+        }
+    }
+
+    /**
+     * Clean up old message mappings
+     */
+    cleanupMessageMappings() {
+        if (this.messageMappings.size > this.MAX_MESSAGE_MAPPINGS) {
+            const keysToDelete = Array.from(this.messageMappings.keys())
+                .slice(0, Math.floor(this.messageMappings.size * 0.3));
+            keysToDelete.forEach(key => this.messageMappings.delete(key));
+            console.log(`Cleaned up ${keysToDelete.length} old message mappings`);
+        }
+    }
+
+    /**
+     * Send message to webhook
+     * @param {Object} message - Discord message object
+     * @param {string} webhookUrl - Webhook URL
+     * @param {Function} resolveMentions - Function to resolve mentions
+     * @param {Function} sanitizeMessage - Function to sanitize message content
+     * @param {Function} sanitizeEmbeds - Function to sanitize embeds
+     * @param {boolean} isUpdate - Whether this is a message update
+     */
+    sendToWebhook(message, webhookUrl, resolveMentions, sanitizeMessage, sanitizeEmbeds, isUpdate = false) {
+        console.log(`Attempting to send to webhook for channel ${message.channel.id}`);
+        
+        if (!webhookUrl) {
+            console.log(`No webhook URL mapped for channel ID: ${message.channel.id}`);
+            return;
+        }
+
+        console.log(`Webhook URL found, queuing message for ${message.author.username}`);
+
+        // Queue the webhook request to respect rate limits
+        this.webhookQueue.push(async () => {
+            try {
+                const displayName = message.member?.displayName || message.author.username;
+                const sanitizedContent = sanitizeMessage(resolveMentions(message));
+
+                const messageData = {
+                    username: `${displayName} #${message.channel.name}`,
+                    content: sanitizedContent,
+                    avatar_url: message.author.displayAvatarURL(),
+                    embeds: message.embeds.length > 0 ? sanitizeEmbeds(message.embeds) : undefined,
+                };
+
+                console.log(`Sending webhook for user: ${displayName}, content length: ${sanitizedContent.length}`);
+
+                let form = new FormData();
+                form.append('payload_json', JSON.stringify(messageData));
+
+                // Handle attachments
+                if (message.attachments.size > 0) {
+                    console.log(`Processing ${message.attachments.size} attachments`);
+                    const attachmentPromises = Array.from(message.attachments.values()).map(async (attachment, index) => {
+                        try {
+                            const response = await this.axiosInstance.get(attachment.url, { 
+                                responseType: 'stream',
+                                timeout: 8000
+                            });
+                            form.append(`file${index}`, response.data, {
+                                filename: attachment.name,
+                                contentType: response.headers['content-type'] || 'application/octet-stream',
+                            });
+                        } catch (error) {
+                            console.error(`Error fetching attachment ${attachment.name}: ${error.message}`);
+                        }
+                    });
+                    
+                    await Promise.allSettled(attachmentPromises);
+                }
+
+                let response;
+                if (isUpdate && this.messageMappings.has(message.id)) {
+                    const url = `${webhookUrl}/messages/${this.messageMappings.get(message.id)}`;
+                    console.log(`Updating existing message via webhook`);
+                    response = await this.axiosInstance.patch(url, form, {
+                        headers: form.getHeaders(),
+                        timeout: 10000
+                    });
+                } else if (!isUpdate) {
+                    const urlWithWait = `${webhookUrl}?wait=true`;
+                    console.log(`Sending new message via webhook`);
+                    response = await this.axiosInstance.post(urlWithWait, form, {
+                        headers: form.getHeaders(),
+                        timeout: 10000
+                    });
+
+                    if (response.data?.id) {
+                        this.messageMappings.set(message.id, response.data.id);
+                        this.performanceStats.webhooksSent++;
+                        console.log(`Webhook sent successfully, message ID: ${response.data.id}`);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error sending message to webhook: ${error.message}`);
+                console.error(`Webhook URL: ${webhookUrl}`);
+                this.performanceStats.errors++;
+            }
+        });
+    }
+
+    /**
+     * Check if message mapping exists
+     * @param {string} messageId - Discord message ID
+     * @returns {boolean}
+     */
+    hasMapping(messageId) {
+        return this.messageMappings.has(messageId);
+    }
+
+    /**
+     * Get current queue length
+     * @returns {number}
+     */
+    getQueueLength() {
+        return this.webhookQueue.length;
+    }
+
+    /**
+     * Wait for queue to empty
+     * @param {number} timeout - Timeout in milliseconds
+     * @returns {Promise<void>}
+     */
+    waitForQueueEmpty(timeout = 3000) {
+        return new Promise(resolve => {
+            const checkQueue = () => {
+                if (this.webhookQueue.length === 0) {
+                    resolve();
+                } else {
+                    setTimeout(checkQueue, 100);
+                }
+            };
+            checkQueue();
+            
+            // Timeout fallback
+            setTimeout(resolve, timeout);
+        });
+    }
+}
+
+module.exports = WebhookManager;
