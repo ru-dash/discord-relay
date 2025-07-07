@@ -9,13 +9,15 @@ class ConfigManager {
             botName: 'example-bot',
             token: '', 
             eventHook: '',
-            channelMappings: []
+            channelMappings: [],
+            everyoneCatch: []
         };
         this.config = { 
             botName: 'example-bot',
             token: '', 
             eventHook: '',
-            channelMappings: []
+            channelMappings: [],
+            everyoneCatch: []
         };
     }
 
@@ -50,10 +52,26 @@ class ConfigManager {
             throw new Error('channelMappings must be an array');
         }
         config.channelMappings.forEach((mapping, index) => {
-            if (!mapping.channelId || !mapping.webhookUrl) {
-                throw new Error(`Invalid mapping at index ${index}: missing channelId or webhookUrl`);
+            // Support both old format (channelId) and new format (channelName + guildId)
+            if (!mapping.webhookUrl) {
+                throw new Error(`Invalid mapping at index ${index}: missing webhookUrl`);
+            }
+            if (!mapping.channelId && !mapping.channelName) {
+                throw new Error(`Invalid mapping at index ${index}: missing channelId or channelName`);
+            }
+            if (mapping.channelName && !mapping.guildId) {
+                throw new Error(`Invalid mapping at index ${index}: channelName requires guildId`);
             }
         });
+
+        // Validate everyoneCatch if present
+        if (config.everyoneCatch && Array.isArray(config.everyoneCatch)) {
+            config.everyoneCatch.forEach((catchMapping, index) => {
+                if (!catchMapping.guildId || !catchMapping.webhookUrl) {
+                    throw new Error(`Invalid everyoneCatch at index ${index}: missing guildId or webhookUrl`);
+                }
+            });
+        }
         
         // Set default values for optional fields
         if (!config.botName) {
@@ -153,6 +171,83 @@ class ConfigManager {
      */
     getBotName() {
         return this.config.botName || 'example-bot';
+    }
+
+    /**
+     * Check if a channel name matches a pattern
+     * @param {string} channelName - The channel name to check
+     * @param {string} pattern - The pattern to match against
+     * @returns {boolean} - True if matches
+     */
+    matchesChannelPattern(channelName, pattern) {
+        // Exact match (quoted or unquoted)
+        if (pattern === channelName || pattern === `"${channelName}"`) {
+            return true;
+        }
+
+        // Wildcard patterns
+        if (pattern.includes('*')) {
+            // Convert pattern to regex
+            const regexPattern = pattern
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+                .replace(/\\\*/g, '.*'); // Convert * to .*
+            
+            const regex = new RegExp(`^${regexPattern}$`, 'i');
+            return regex.test(channelName);
+        }
+
+        // Case-insensitive exact match
+        return channelName.toLowerCase() === pattern.toLowerCase();
+    }
+
+    /**
+     * Get webhook URL for a channel based on ID or name pattern
+     * @param {string} channelId - Discord channel ID
+     * @param {string} channelName - Channel name
+     * @param {string} guildId - Guild ID
+     * @returns {Object|null} - Object with webhookUrl and redactChannelName if found
+     */
+    getWebhookForChannel(channelId, channelName, guildId) {
+        for (const mapping of this.config.channelMappings) {
+            // Check by channel ID (legacy support)
+            if (mapping.channelId && mapping.channelId === channelId) {
+                return {
+                    webhookUrl: mapping.webhookUrl,
+                    redactChannelName: mapping.redactChannelName || false
+                };
+            }
+
+            // Check by channel name pattern within guild
+            if (mapping.channelName && mapping.guildId === guildId) {
+                if (this.matchesChannelPattern(channelName, mapping.channelName)) {
+                    return {
+                        webhookUrl: mapping.webhookUrl,
+                        redactChannelName: mapping.redactChannelName || false
+                    };
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get everyone catch webhook for a guild
+     * @param {string} guildId - Guild ID
+     * @returns {string|null} - Webhook URL if found
+     */
+    getEveryoneCatchWebhook(guildId) {
+        if (!this.config.everyoneCatch) return null;
+        
+        const catchMapping = this.config.everyoneCatch.find(mapping => mapping.guildId === guildId);
+        return catchMapping ? catchMapping.webhookUrl : null;
+    }
+
+    /**
+     * Get all everyone catch mappings
+     * @returns {Array} - Array of everyone catch mappings
+     */
+    getEveryoneCatchMappings() {
+        return this.config.everyoneCatch || [];
     }
 }
 

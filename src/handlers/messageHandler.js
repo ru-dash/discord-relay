@@ -1,12 +1,13 @@
 const MessageUtils = require('../utils/messageUtils');
 
 class MessageHandler {
-    constructor(databaseManager, webhookManager, cacheManager, performanceStats, autoUpdater) {
+    constructor(databaseManager, webhookManager, cacheManager, performanceStats, autoUpdater, configManager) {
         this.databaseManager = databaseManager;
         this.webhookManager = webhookManager;
         this.cacheManager = cacheManager;
         this.performanceStats = performanceStats;
         this.autoUpdater = autoUpdater;
+        this.configManager = configManager;
         this.channelWebhookMap = new Map();
         this.messageDebounceMap = new Map();
         this.MESSAGE_DEBOUNCE_TIME = 100; // 100ms debounce
@@ -113,6 +114,7 @@ class MessageHandler {
         // Process webhook and database operations in parallel
         Promise.allSettled([
             this.sendToWebhookIfMapped(message),
+            this.checkEveryoneCatch(message),
             Promise.resolve(this.saveMessageToDB(message))
         ]).then(() => {
             this.performanceStats.messagesProcessed++;
@@ -127,7 +129,24 @@ class MessageHandler {
      * @param {Object} message - Discord message object
      */
     sendToWebhookIfMapped(message) {
-        const webhookUrl = this.channelWebhookMap.get(message.channel.id);
+        // First check legacy channel ID mappings
+        let webhookUrl = this.channelWebhookMap.get(message.channel.id);
+        let redactChannelName = false;
+        
+        // If no legacy mapping, check new pattern-based mappings
+        if (!webhookUrl && this.configManager) {
+            const mappingResult = this.configManager.getWebhookForChannel(
+                message.channel.id,
+                message.channel.name,
+                message.guild.id
+            );
+            
+            if (mappingResult) {
+                webhookUrl = mappingResult.webhookUrl;
+                redactChannelName = mappingResult.redactChannelName;
+            }
+        }
+        
         if (webhookUrl) {
             this.webhookManager.sendToWebhook(
                 message,
@@ -135,7 +154,41 @@ class MessageHandler {
                 (msg) => MessageUtils.resolveMentions(msg, this.cacheManager),
                 MessageUtils.sanitizeMessage,
                 MessageUtils.sanitizeEmbeds,
-                false // isUpdate
+                false, // isUpdate
+                redactChannelName
+            );
+        }
+    }
+
+    /**
+     * Check for @everyone, @here, or role mentions and send to everyone catch webhook
+     * @param {Object} message - Discord message object
+     */
+    async checkEveryoneCatch(message) {
+        if (!this.configManager) return;
+
+        const everyoneCatchWebhook = this.configManager.getEveryoneCatchWebhook(message.guild.id);
+        if (!everyoneCatchWebhook) return;
+
+        // Check for @everyone or @here mentions
+        const hasEveryoneHere = message.content.includes('@everyone') || message.content.includes('@here');
+        
+        // Check for role mentions
+        const hasRoleMentions = message.mentions.roles.size > 0;
+
+        if (hasEveryoneHere || hasRoleMentions) {
+            console.log(`Everyone catch triggered in ${message.guild.name}#${message.channel.name}: @everyone=${message.content.includes('@everyone')}, @here=${message.content.includes('@here')}, roles=${message.mentions.roles.size}`);
+            
+            // Relay the message normally using the standard webhook format
+            // Everyone catch messages always redact channel names for privacy
+            this.webhookManager.sendToWebhook(
+                message,
+                everyoneCatchWebhook,
+                (msg) => MessageUtils.resolveMentions(msg, this.cacheManager),
+                MessageUtils.sanitizeMessage,
+                MessageUtils.sanitizeEmbeds,
+                false, // isUpdate
+                true   // redactChannelName - always redact for everyone catch
             );
         }
     }

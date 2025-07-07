@@ -67,7 +67,8 @@ class DiscordRelayBot {
             this.components.webhookManager,
             this.components.cacheManager,
             this.components.performanceStats,
-            this.components.autoUpdater
+            this.components.autoUpdater,
+            this.components.configManager
         );
         
         this.components.systemEventHandler = new SystemEventHandler(
