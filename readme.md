@@ -12,6 +12,7 @@ A robust2. **Database Setup**
 
 * **Message Relay**: Relay messages from specific channels to Discord webhooks
 * **Event Monitoring**: Track member events (joins/leaves, role changes) and channel updates
+* **Poll Support**: Automatically relay Discord polls with voting options and results
 * **PostgreSQL Database**: Persistent storage for messages, members, and events
 * **In-Memory Caching**: Fast access with configurable RAM limits and TTL
 * **Auto-Restart System**: Automatic recovery from crashes with smart error detection
@@ -19,6 +20,7 @@ A robust2. **Database Setup**
 * **System Notifications**: Critical error alerts via webhook notifications
 * **Robust Error Handling**: Graceful shutdown and restart prevention for unrecoverable errors
 * **Performance Monitoring**: Built-in performance statistics and logging
+* **Poll Relay**: Discord polls are converted to rich embeds showing options, vote counts, and expiry times with links back to the original poll for voting
 
 ## Quick Setup
 
@@ -102,13 +104,54 @@ The system maintains backward compatibility with:
 - Individual `systemHook` and `database` in bot configs (overrides global settings)
 
 ### Channel Mappings
-Each mapping relays messages from a source channel to a webhook:
+Each mapping relays messages from a source channel to a webhook. Supports both exact channel IDs and channel name patterns:
+
+#### By Channel ID (Legacy)
 ```json
 {
   "channelId": "123456789",
   "webhookUrl": "https://discord.com/api/webhooks/..."
 }
 ```
+
+#### By Channel Name Pattern (New)
+```json
+{
+  "guildId": "987654321",
+  "channelName": "ping*",
+  "webhookUrl": "https://discord.com/api/webhooks/...",
+  "redactChannelName": true
+}
+```
+
+#### Channel Name Redaction
+Add `"redactChannelName": true` to any mapping to hide the actual channel name in relayed messages:
+- **Normal**: `Username #secret-intel-channel`
+- **Redacted**: `Username #[redacted]`
+
+This is useful for sensitive channels where you want to relay content but hide the channel name for operational security.
+
+#### Supported Channel Name Patterns
+- `"general"` - Exact match (case-insensitive)
+- `"ping*"` - Starts with "ping"
+- `"*intel*"` - Contains "intel"
+- `"*ping"` - Ends with "ping"
+- `"\"exact-name\""` - Exact match with quotes for special characters
+
+#### Everyone Catch (Mass Mention Alerts)
+Monitor for @everyone, @here, or role mentions across entire guilds:
+```json
+{
+  "everyoneCatch": [
+    {
+      "guildId": "987654321",
+      "webhookUrl": "https://discord.com/api/webhooks/..."
+    }
+  ]
+}
+```
+
+This feature relays messages containing mass mentions using the standard message format. Channel names are automatically redacted as `#[redacted]` for everyone catch messages to protect sensitive channel information.
 
 ## Auto-Restart System
 

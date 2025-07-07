@@ -90,8 +90,9 @@ class WebhookManager {
      * @param {Function} sanitizeMessage - Function to sanitize message content
      * @param {Function} sanitizeEmbeds - Function to sanitize embeds
      * @param {boolean} isUpdate - Whether this is a message update
+     * @param {boolean} redactChannelName - Whether to redact the channel name
      */
-    sendToWebhook(message, webhookUrl, resolveMentions, sanitizeMessage, sanitizeEmbeds, isUpdate = false) {
+    sendToWebhook(message, webhookUrl, resolveMentions, sanitizeMessage, sanitizeEmbeds, isUpdate = false, redactChannelName = false) {
         console.log(`Attempting to send to webhook for channel ${message.channel.id}`);
         
         if (!webhookUrl) {
@@ -106,13 +107,27 @@ class WebhookManager {
             try {
                 const displayName = message.member?.displayName || message.author.username;
                 const sanitizedContent = sanitizeMessage(resolveMentions(message));
+                
+                // Use redacted channel name if requested
+                const channelDisplay = redactChannelName ? '[redacted]' : message.channel.name;
 
                 const messageData = {
-                    username: `${displayName} #${message.channel.name}`,
+                    username: `${displayName} #${channelDisplay}`,
                     content: sanitizedContent,
                     avatar_url: message.author.displayAvatarURL(),
                     embeds: message.embeds.length > 0 ? sanitizeEmbeds(message.embeds) : undefined,
                 };
+
+                // Handle Discord polls
+                if (message.poll) {
+                    console.log(`Processing poll data`);
+                    const pollEmbed = this.createPollEmbed(message.poll, message);
+                    
+                    if (!messageData.embeds) {
+                        messageData.embeds = [];
+                    }
+                    messageData.embeds.push(pollEmbed);
+                }
 
                 console.log(`Sending webhook for user: ${displayName}, content length: ${sanitizedContent.length}`);
 
@@ -171,6 +186,41 @@ class WebhookManager {
     }
 
     /**
+     * Send raw data to webhook (for custom notifications)
+     * @param {string} webhookUrl - Webhook URL
+     * @param {Object} data - Raw webhook data
+     */
+    async sendRawToWebhook(webhookUrl, data) {
+        if (!webhookUrl) {
+            console.log('No webhook URL provided for raw webhook send');
+            return;
+        }
+
+        // Queue the webhook request to respect rate limits
+        this.webhookQueue.push(async () => {
+            try {
+                console.log(`Sending raw webhook data`);
+                
+                const response = await this.axiosInstance.post(webhookUrl, data, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 10000
+                });
+
+                if (response.status === 200 || response.status === 204) {
+                    this.performanceStats.webhooksSent++;
+                    console.log(`Raw webhook sent successfully`);
+                }
+            } catch (error) {
+                console.error(`Error sending raw data to webhook: ${error.message}`);
+                console.error(`Webhook URL: ${webhookUrl}`);
+                this.performanceStats.errors++;
+            }
+        });
+    }
+
+    /**
      * Check if message mapping exists
      * @param {string} messageId - Discord message ID
      * @returns {boolean}
@@ -206,6 +256,27 @@ class WebhookManager {
             // Timeout fallback
             setTimeout(resolve, timeout);
         });
+    }
+
+    /**
+     * Create an embed representation of a Discord poll
+     * @param {Object} poll - Discord poll object
+     * @param {Object} message - Original message object
+     * @returns {Object} - Poll embed
+     */
+    createPollEmbed(poll, message) {
+        const embed = {
+            title: 'Poll',
+            color: 0x5865F2, // Discord blurple
+            fields: []
+        };
+
+        // Add poll question
+        if (poll.question?.text) {
+            embed.description = poll.question.text;
+        }
+
+        return embed;
     }
 }
 
