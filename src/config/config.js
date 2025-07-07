@@ -4,24 +4,36 @@ const path = require('path');
 class ConfigManager {
     constructor(configPath) {
         this.configPath = configPath || path.join(__dirname, '../../config.json');
+        this.globalSettingsPath = path.join(__dirname, '../../settings.json');
         this.defaultConfig = { 
-            agentName: 'Discord Relay Bot',
+            botName: 'example-bot',
             token: '', 
-            systemHook: '',
             eventHook: '',
-            channelMappings: [],
-            instanceName: 'default',
-            dbPath: './messages.db'
+            channelMappings: []
         };
         this.config = { 
-            agentName: 'Discord Relay Bot',
+            botName: 'example-bot',
             token: '', 
-            systemHook: '',
             eventHook: '',
-            channelMappings: [],
-            instanceName: 'default',
-            dbPath: './messages.db'
+            channelMappings: []
         };
+    }
+
+    /**
+     * Load global settings from settings.json
+     * @returns {Object} - Global settings
+     */
+    loadGlobalSettings() {
+        try {
+            if (fs.existsSync(this.globalSettingsPath)) {
+                const globalContent = fs.readFileSync(this.globalSettingsPath, 'utf8');
+                const globalSettings = JSON.parse(globalContent);
+                return globalSettings.global || {};
+            }
+        } catch (error) {
+            console.warn('Failed to load global settings:', error.message);
+        }
+        return {};
     }
 
     /**
@@ -44,14 +56,8 @@ class ConfigManager {
         });
         
         // Set default values for optional fields
-        if (!config.agentName) {
-            config.agentName = 'Discord Relay Bot';
-        }
-        if (!config.instanceName) {
-            config.instanceName = 'default';
-        }
-        if (!config.dbPath) {
-            config.dbPath = './messages.db';
+        if (!config.botName) {
+            config.botName = 'example-bot';
         }
         
         return true;
@@ -68,10 +74,27 @@ class ConfigManager {
             process.exit(0);
         } else {
             try {
+                // Load bot-specific config
                 const configFileContent = fs.readFileSync(this.configPath, 'utf8');
-                this.config = JSON.parse(configFileContent);
+                const botConfig = JSON.parse(configFileContent);
+                
+                // Load global settings
+                const globalSettings = this.loadGlobalSettings();
+                
+                // Merge global settings with bot config
+                this.config = {
+                    ...botConfig,
+                    // Add global settings
+                    systemHook: globalSettings.systemHook || '',
+                    database: globalSettings.database || {},
+                    // Use botName for both agentName and instanceName for backward compatibility
+                    agentName: botConfig.botName || 'example-bot',
+                    instanceName: botConfig.botName || 'example-bot'
+                };
+                
                 this.validateConfig(this.config);
                 console.log('Config loaded and validated successfully.');
+                console.log(`Bot: ${this.config.botName} (${this.config.agentName})`);
                 return this.config;
             } catch (error) {
                 console.error('Failed to read, parse, or validate config file:', error.message);
@@ -105,7 +128,7 @@ class ConfigManager {
      * @returns {string} - Database file path
      */
     getDatabasePath() {
-        return this.config.dbPath || './messages.db';
+        return this.config.dbPath || `./databases/${this.config.botName || 'default'}.db`;
     }
 
     /**
@@ -113,7 +136,7 @@ class ConfigManager {
      * @returns {string} - Instance name
      */
     getInstanceName() {
-        return this.config.instanceName || 'default';
+        return this.config.instanceName || this.config.botName || 'default';
     }
 
     /**
@@ -121,7 +144,15 @@ class ConfigManager {
      * @returns {string} - Agent name
      */
     getAgentName() {
-        return this.config.agentName || 'Discord Relay Bot';
+        return this.config.agentName || this.config.botName || 'Discord Relay Bot';
+    }
+
+    /**
+     * Get bot name from configuration
+     * @returns {string} - Bot name
+     */
+    getBotName() {
+        return this.config.botName || 'example-bot';
     }
 }
 

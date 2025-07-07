@@ -46,7 +46,7 @@ class DiscordRelayBot {
         
         // Initialize hybrid database manager with configuration
         this.components.databaseManager = new DatabaseManager({
-            instanceName: this.config.instanceName || 'default',
+            instanceName: this.config.instanceName || this.config.botName || 'default',
             pg: this.config.database?.postgresql || {},
             redis: this.config.database?.redis || {}
         });

@@ -41,28 +41,35 @@ A robust2. **Database Setup**
 
 4. **Configuration**
    - Copy `configs/example-bot.json` to `configs/your-bot.json`
+   - Update global settings in `settings.json`:
+     ```json
+     {
+       "global": {
+         "systemHook": "https://discord.com/api/webhooks/...",
+         "database": {
+           "postgresql": {
+             "host": "localhost",
+             "port": 5432,
+             "database": "discord_relay",
+             "user": "discord_bot",
+             "password": "your_password"
+           }
+         }
+       }
+     }
+     ```
    - Update your bot configuration:
      ```json
      {
-       "agentName": "your-bot",
+       "botName": "your-bot",
        "token": "YOUR_DISCORD_TOKEN",
-       "systemHook": "https://discord.com/api/webhooks/...",
        "eventHook": "https://discord.com/api/webhooks/...",
        "channelMappings": [
          {
            "channelId": "CHANNEL_ID_TO_MONITOR",
            "webhookUrl": "https://discord.com/api/webhooks/..."
          }
-       ],
-       "database": {
-         "postgresql": {
-           "host": "localhost",
-           "port": 5432,
-           "database": "discord_relay",
-           "user": "discord_bot",
-           "password": "your_password"
-         }
-       }
+       ]
      }
      ```
 
@@ -77,14 +84,22 @@ A robust2. **Database Setup**
 
 ## Configuration Reference
 
-### Core Settings
-- `agentName`: Unique identifier for this bot instance
-- `token`: Discord bot/selfbot token
-- `instanceName`: Human-readable instance name
-
-### Webhooks
+### Global Settings (`settings.json`)
+Contains shared configuration used by all bot instances:
 - `systemHook`: Webhook for critical error notifications (invalid token, etc.)
+- `database`: PostgreSQL connection settings shared by all bots
+
+### Bot Configuration (`configs/bot-name.json`)
+Each bot instance has its own configuration file:
+- `botName`: Unique identifier for this bot (used as both agent and instance name)
+- `token`: Discord bot/selfbot token
 - `eventHook`: Webhook for member events (joins, leaves, role changes)
+- `channelMappings`: Array of channel-to-webhook mappings
+
+### Legacy Support
+The system maintains backward compatibility with:
+- `agentName` and `instanceName` (now combined into `botName`)
+- Individual `systemHook` and `database` in bot configs (overrides global settings)
 
 ### Channel Mappings
 Each mapping relays messages from a source channel to a webhook:
@@ -92,22 +107,6 @@ Each mapping relays messages from a source channel to a webhook:
 {
   "channelId": "123456789",
   "webhookUrl": "https://discord.com/api/webhooks/..."
-}
-```
-
-### Database Configuration
-```json
-{
-  "database": {
-    "postgresql": {
-      "host": "localhost",
-      "port": 5432,
-      "database": "discord_relay",
-      "user": "discord_bot",
-      "password": "your_password",
-      "ssl": false
-    }
-  }
 }
 ```
 
