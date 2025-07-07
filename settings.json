@@ -1,0 +1,15 @@
+{
+  "global": {
+    "systemHook": "https://discord.com/api/webhooks/1391518758165807124/ks79X4nuPK8dAVt1-_ehvU1wjAIoFjtXR1a0S97uPNMsrM8ad4bkA0EAAPNxKlR259XO",
+    "database": {
+      "postgresql": {
+        "host": "localhost",
+        "port": 5432,
+        "database": "discord_relay",
+        "user": "discord_bot",
+        "password": "your_password",
+        "ssl": false
+      }
+    }
+  }
+}
