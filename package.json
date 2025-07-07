@@ -1,6 +1,6 @@
 {
   "name": "discord-bot-electron",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "app.js",
   "scripts": {
     "start": "electron main.js",

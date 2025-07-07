@@ -21,7 +21,8 @@ const modules = [
     { name: 'MemberManager', path: './src/handlers/memberManager.js' },
     { name: 'PerformanceStats', path: './src/utils/performance.js' },
     { name: 'ShutdownManager', path: './src/utils/shutdown.js' },
-    { name: 'MessageUtils', path: './src/utils/messageUtils.js' }
+    { name: 'MessageUtils', path: './src/utils/messageUtils.js' },
+    { name: 'AutoUpdater', path: './src/utils/autoUpdater.js' }
 ];
 
 let passedTests = 0;
@@ -88,10 +89,122 @@ console.log(`\n📊 Test Results:`);
 console.log(`✅ Passed: ${passedTests}/${totalTests}`);
 console.log(`❌ Failed: ${totalTests - passedTests}/${totalTests}`);
 
-if (passedTests === totalTests) {
-    console.log('\n🎉 All tests passed! Modular structure is valid.');
-    process.exit(0);
-} else {
-    console.log('\n⚠️  Some tests failed. Please check the module structure.');
-    process.exit(1);
+// Auto Updater Specific Tests
+console.log('\n🔧 Running Auto Updater Specific Tests...\n');
+
+async function testAutoUpdater() {
+    let autoUpdaterTests = 0;
+    let autoUpdaterPassed = 0;
+    
+    try {
+        const AutoUpdater = require('./src/utils/autoUpdater.js');
+        const updater = new AutoUpdater();
+        
+        // Test 1: Version parsing
+        autoUpdaterTests++;
+        const currentVersion = updater.getCurrentVersion();
+        if (currentVersion && currentVersion !== '1.0.0') {
+            console.log(`✅ AutoUpdater: Version parsing successful (${currentVersion})`);
+            autoUpdaterPassed++;
+        } else {
+            console.log(`❌ AutoUpdater: Version parsing failed or using fallback`);
+        }
+        
+        // Test 2: Version comparison
+        autoUpdaterTests++;
+        const isUpdateAvailable1 = updater.isUpdateAvailable('1.0.1');
+        const isUpdateAvailable2 = updater.isUpdateAvailable('0.9.0');
+        if (isUpdateAvailable1 === true && isUpdateAvailable2 === false) {
+            console.log(`✅ AutoUpdater: Version comparison logic working`);
+            autoUpdaterPassed++;
+        } else {
+            console.log(`❌ AutoUpdater: Version comparison logic failed`);
+        }
+        
+        // Test 3: Update check timing
+        autoUpdaterTests++;
+        const shouldCheck = updater.shouldCheckForUpdate();
+        if (typeof shouldCheck === 'boolean') {
+            console.log(`✅ AutoUpdater: Update check timing logic working`);
+            autoUpdaterPassed++;
+        } else {
+            console.log(`❌ AutoUpdater: Update check timing logic failed`);
+        }
+        
+        // Test 4: GitHub API fetch (with timeout)
+        autoUpdaterTests++;
+        console.log(`🔍 AutoUpdater: Testing GitHub API fetch...`);
+        try {
+            const releaseInfo = await Promise.race([
+                updater.fetchLatestRelease(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Test timeout')), 5000)
+                )
+            ]);
+            
+            if (releaseInfo && releaseInfo.tag_name) {
+                console.log(`✅ AutoUpdater: GitHub API fetch successful (Latest: ${releaseInfo.tag_name})`);
+                autoUpdaterPassed++;
+            } else {
+                console.log(`⚠️  AutoUpdater: GitHub API returned no release info`);
+            }
+        } catch (error) {
+            console.log(`⚠️  AutoUpdater: GitHub API fetch failed (${error.message})`);
+            console.log(`   This is expected if offline or repo doesn't exist`);
+        }
+        
+        // Test 5: Force update check
+        autoUpdaterTests++;
+        console.log(`🔍 AutoUpdater: Testing force update check...`);
+        try {
+            const forceResult = await Promise.race([
+                updater.forceUpdateCheck(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Test timeout')), 5000)
+                )
+            ]);
+            
+            if (typeof forceResult === 'boolean') {
+                console.log(`✅ AutoUpdater: Force update check completed`);
+                autoUpdaterPassed++;
+            } else {
+                console.log(`❌ AutoUpdater: Force update check returned invalid result`);
+            }
+        } catch (error) {
+            console.log(`⚠️  AutoUpdater: Force update check failed (${error.message})`);
+        }
+        
+    } catch (error) {
+        console.log(`❌ AutoUpdater: Failed to initialize - ${error.message}`);
+    }
+    
+    console.log(`\n🔧 Auto Updater Test Results:`);
+    console.log(`✅ Passed: ${autoUpdaterPassed}/${autoUpdaterTests}`);
+    console.log(`❌ Failed: ${autoUpdaterTests - autoUpdaterPassed}/${autoUpdaterTests}`);
+    
+    return { passed: autoUpdaterPassed, total: autoUpdaterTests };
 }
+
+// Run auto updater tests
+testAutoUpdater().then(results => {
+    const totalPassed = passedTests + results.passed;
+    const totalTestsOverall = totalTests + results.total;
+    
+    console.log(`\n📊 Overall Results:`);
+    console.log(`✅ Total Passed: ${totalPassed}/${totalTestsOverall}`);
+    console.log(`❌ Total Failed: ${totalTestsOverall - totalPassed}/${totalTestsOverall}`);
+    
+    if (totalPassed === totalTestsOverall) {
+        console.log('\n🎉 All tests passed! Everything is working correctly.');
+        process.exit(0);
+    } else {
+        console.log('\n⚠️  Some tests failed. Please check the results above.');
+        process.exit(1);
+    }
+}).catch(error => {
+    console.error('Error running auto updater tests:', error);
+    process.exit(1);
+});
+
+// Remove the original exit calls since we're now using async
+return;
