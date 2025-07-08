@@ -25,6 +25,8 @@ const SystemEventHandler = require('./src/handlers/systemEventHandler');
 const MemberManager = require('./src/handlers/memberManager');
 const ShutdownManager = require('./src/utils/shutdown');
 const AutoUpdater = require('./src/utils/autoUpdater');
+const CommandProcessor = require('./src/handlers/commandProcessor');
+const CommandCleanup = require('./cleanup-commands');
 
 class DiscordRelayBot {
     constructor() {
@@ -79,6 +81,14 @@ class DiscordRelayBot {
         this.components.memberManager = new MemberManager(
             this.components.databaseManager
         );
+
+        // Initialize command processor
+        this.components.commandProcessor = new CommandProcessor(
+            null, // client will be set later
+            this.components.configManager,
+            this.config.instanceName || 'default',
+            this.components.databaseManager
+        );
     }
 
     /**
@@ -119,6 +129,9 @@ class DiscordRelayBot {
                 }
             }
         });
+
+        // Set client reference in command processor
+        this.components.commandProcessor.client = this.components.client;
 
         this.setupEventListeners();
     }
@@ -196,6 +209,9 @@ class DiscordRelayBot {
             const agentName = this.config.agentName || 'Discord Relay Bot';
             console.log(`[${instanceName}] ${agentName} logged in as ${client.user.tag}!`);
             
+            // Start command processor
+            this.components.commandProcessor.start();
+            
             setTimeout(() => {
                 this.initializeAfterReady();
             }, 2000); // 2 second delay
@@ -228,11 +244,43 @@ class DiscordRelayBot {
         
         console.log(`[${this.config.instanceName || 'default'}] Bot initialization completed - ready to relay messages`);
         
+        // Cleanup old command files on startup
+        this.cleanupOldCommands();
+        
         // Start periodic update checks
         this.components.autoUpdater.startPeriodicChecks();
         
+        // Set up periodic command cleanup (every 6 hours)
+        setInterval(() => {
+            this.cleanupOldCommands();
+        }, 6 * 60 * 60 * 1000); // 6 hours in milliseconds
+        
         // Start periodic member synchronization (every 4 hours)
         this.startPeriodicMemberSync();
+    }
+
+    /**
+     * Cleanup old command files
+     */
+    async cleanupOldCommands() {
+        try {
+            const cleanup = new CommandCleanup('./commands');
+            console.log(`[${this.config.instanceName || 'default'}] Cleaning up old command files...`);
+            
+            const results = await cleanup.cleanup(false); // false = not a dry run
+            
+            if (results.deleted.length > 0) {
+                console.log(`[${this.config.instanceName || 'default'}] Cleaned up ${results.deleted.length} old command files`);
+            } else {
+                console.log(`[${this.config.instanceName || 'default'}] No old command files to clean up`);
+            }
+            
+            if (results.errors.length > 0) {
+                console.warn(`[${this.config.instanceName || 'default'}] Cleanup errors:`, results.errors);
+            }
+        } catch (error) {
+            console.error(`[${this.config.instanceName || 'default'}] Error during command cleanup:`, error.message);
+        }
     }
 
     /**
@@ -304,7 +352,11 @@ class DiscordRelayBot {
             );
             
             // Initialize webhook manager
-            this.components.webhookManager.initialize(this.axiosInstance, this.components.performanceStats);
+            this.components.webhookManager.initialize(
+                this.axiosInstance, 
+                this.components.performanceStats,
+                this.components.databaseManager
+            );
             
             // Setup Discord client
             this.setupClient();

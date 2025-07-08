@@ -167,6 +167,11 @@ class ShutdownManager {
             if (this.components.messageHandler) {
                 this.components.messageHandler.clearDebounceTimers();
             }
+
+            // Stop command processor
+            if (this.components.commandProcessor) {
+                this.components.commandProcessor.stop();
+            }
             
             // Clear member sync interval
             if (this.components.memberSyncInterval) {

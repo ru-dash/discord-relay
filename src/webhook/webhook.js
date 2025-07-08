@@ -27,10 +27,12 @@ class WebhookManager {
      * Initialize webhook manager
      * @param {Object} axiosInstance - Configured axios instance
      * @param {Object} performanceStats - Performance statistics object
+     * @param {Object} databaseManager - Database manager instance (optional)
      */
-    initialize(axiosInstance, performanceStats) {
+    initialize(axiosInstance, performanceStats, databaseManager = null) {
         this.axiosInstance = axiosInstance;
         this.performanceStats = performanceStats;
+        this.databaseManager = databaseManager;
     }
 
     /**
@@ -162,14 +164,40 @@ class WebhookManager {
                 }
 
                 let response;
-                if (isUpdate && this.messageMappings.has(message.id)) {
-                    const url = `${webhookUrl}/messages/${this.messageMappings.get(message.id)}`;
-                    console.log(`Updating existing message via webhook`);
-                    response = await this.axiosInstance.patch(url, form, {
-                        headers: form.getHeaders(),
-                        timeout: 10000
-                    });
-                } else if (!isUpdate) {
+                if (isUpdate) {
+                    // Check in-memory mapping first
+                    let relayedMessageId = this.messageMappings.get(message.id);
+                    
+                    // If not in memory, check database
+                    if (!relayedMessageId && this.databaseManager) {
+                        try {
+                            const dbMessage = await this.databaseManager.findMessageById(message.id);
+                            if (dbMessage && dbMessage.relayed_message_id) {
+                                relayedMessageId = dbMessage.relayed_message_id;
+                                // Update in-memory mapping for future use
+                                this.messageMappings.set(message.id, relayedMessageId);
+                                console.log(`Retrieved relayed message ID from database: ${message.id} -> ${relayedMessageId}`);
+                            }
+                        } catch (error) {
+                            console.warn(`Error checking database for relayed message ID: ${error.message}`);
+                        }
+                    }
+                    
+                    if (relayedMessageId) {
+                        const url = `${webhookUrl}/messages/${relayedMessageId}`;
+                        console.log(`Updating existing message via webhook: ${relayedMessageId}`);
+                        response = await this.axiosInstance.patch(url, form, {
+                            headers: form.getHeaders(),
+                            timeout: 10000
+                        });
+                        
+                        // Don't update database relationship on edits - it already exists
+                        console.log(`Message edit webhook completed for: ${message.id} -> ${relayedMessageId}`);
+                    } else {
+                        console.log(`No relayed message ID found for update, skipping message edit`);
+                        return;
+                    }
+                } else {
                     const urlWithWait = `${webhookUrl}?wait=true`;
                     console.log(`Sending new message via webhook`);
                     response = await this.axiosInstance.post(urlWithWait, form, {
@@ -177,10 +205,27 @@ class WebhookManager {
                         timeout: 10000
                     });
 
+                    // Only update database relationship for new messages (not edits)
                     if (response.data?.id) {
                         this.messageMappings.set(message.id, response.data.id);
                         this.performanceStats.webhooksSent++;
-                        console.log(`Webhook sent successfully, message ID: ${response.data.id}`);
+                        console.log(`Webhook sent successfully, original ID: ${message.id}, relayed ID: ${response.data.id}`);
+                        
+                        // Update database with relayed message relationship
+                        if (this.databaseManager) {
+                            console.log(`Attempting to update database relationship: ${message.id} -> ${response.data.id}`);
+                            this.databaseManager.updateMessageRelayedId(message.id, response.data.id)
+                                .then(success => {
+                                    if (success) {
+                                        console.log(`Successfully updated database relationship: ${message.id} -> ${response.data.id}`);
+                                    } else {
+                                        console.warn(`Failed to update database relationship: ${message.id} -> ${response.data.id}`);
+                                    }
+                                })
+                                .catch(error => console.warn(`Error updating message relationship in database:`, error.message));
+                        }
+                    } else {
+                        console.warn(`Webhook response did not contain message ID for: ${message.id}`);
                     }
                 }
             } catch (error) {

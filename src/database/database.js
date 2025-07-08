@@ -67,6 +67,7 @@ class DatabaseManager {
 
         // Create tables if they don't exist
         await this.createPostgreSQLTables();
+        await this.updatePostgreSQLTables(); // Update existing tables with new columns
         await this.createPostgreSQLIndexes();
         
         console.log(`[${this.instanceName}] PostgreSQL tables and indexes ensured`);
@@ -95,6 +96,8 @@ class DatabaseManager {
                     author_display_name TEXT,
                     content TEXT,
                     message_data JSONB, -- Full Discord message object
+                    relayed_message_id TEXT, -- ID of the relayed/webhook message
+                    original_message_id TEXT, -- ID of the original message (if this is a relayed message)
                     created_at TIMESTAMPTZ NOT NULL,
                     updated_at TIMESTAMPTZ,
                     instance_name TEXT NOT NULL,
@@ -167,6 +170,8 @@ class DatabaseManager {
                 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC)',
                 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_instance ON messages(instance_name)',
                 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_content_search ON messages USING gin(to_tsvector(\'english\', content))',
+                'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_relayed_id ON messages(relayed_message_id)',
+                'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_original_id ON messages(original_message_id)',
                 
                 // Members indexes
                 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_members_channel_id ON channel_members(channel_id)',
@@ -196,6 +201,35 @@ class DatabaseManager {
 
             console.log(`[${this.instanceName}] PostgreSQL indexes created successfully`);
             
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Update existing tables to add new columns if they don't exist
+     * @returns {Promise<void>}
+     */
+    async updatePostgreSQLTables() {
+        const client = await this.pgPool.connect();
+        
+        try {
+            // Add relayed_message_id column if it doesn't exist
+            await client.query(`
+                ALTER TABLE messages 
+                ADD COLUMN IF NOT EXISTS relayed_message_id TEXT
+            `);
+            
+            // Add original_message_id column if it doesn't exist
+            await client.query(`
+                ALTER TABLE messages 
+                ADD COLUMN IF NOT EXISTS original_message_id TEXT
+            `);
+            
+            console.log(`[${this.instanceName}] PostgreSQL table updates completed`);
+            
+        } catch (error) {
+            console.warn(`[${this.instanceName}] Error updating tables:`, error.message);
         } finally {
             client.release();
         }
@@ -242,13 +276,16 @@ class DatabaseManager {
                     INSERT INTO messages (
                         id, channel_id, channel_name, guild_id, guild_name,
                         author_id, author_display_name, content, message_data,
+                        relayed_message_id, original_message_id,
                         created_at, updated_at, instance_name
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                     ON CONFLICT (id) DO UPDATE SET
                         content = EXCLUDED.content,
                         updated_at = EXCLUDED.updated_at,
                         message_data = EXCLUDED.message_data,
-                        author_display_name = EXCLUDED.author_display_name
+                        author_display_name = EXCLUDED.author_display_name,
+                        relayed_message_id = EXCLUDED.relayed_message_id,
+                        original_message_id = EXCLUDED.original_message_id
                     RETURNING id
                 `, [
                     messageData.id,
@@ -260,6 +297,8 @@ class DatabaseManager {
                     messageData.authorDisplayName,
                     messageData.content,
                     JSON.stringify(messageData.rawMessage || {}),
+                    messageData.relayedMessageId || null,
+                    messageData.originalMessageId || null,
                     new Date(messageData.createdAt),
                     messageData.updatedAt ? new Date(messageData.updatedAt) : null,
                     messageData.instanceName
@@ -408,6 +447,188 @@ class DatabaseManager {
     }
 
     /**
+     * Find message information by message ID (supports both original and relayed message IDs)
+     * @param {string} messageId - Discord message ID (original or relayed)
+     * @returns {Promise<Object|null>} - Original message data or null if not found
+     */
+    async findMessageById(messageId) {
+        const client = await this.pgPool.connect();
+        
+        try {
+            // First, try to find as original message
+            let result = await client.query(
+                'SELECT id, channel_id, channel_name, guild_id, guild_name, relayed_message_id FROM messages WHERE id = $1 LIMIT 1',
+                [messageId]
+            );
+            
+            if (result.rows.length > 0) {
+                const row = result.rows[0];
+                return {
+                    messageId: row.id,
+                    channelId: row.channel_id,
+                    channelName: row.channel_name,
+                    guildId: row.guild_id,
+                    guildName: row.guild_name,
+                    relayedMessageId: row.relayed_message_id,
+                    isOriginal: true
+                };
+            }
+            
+            // If not found, try to find as relayed message and return the original
+            result = await client.query(
+                'SELECT id, channel_id, channel_name, guild_id, guild_name, relayed_message_id FROM messages WHERE relayed_message_id = $1 LIMIT 1',
+                [messageId]
+            );
+            
+            if (result.rows.length > 0) {
+                const row = result.rows[0];
+                return {
+                    messageId: row.id, // Return the original message ID
+                    channelId: row.channel_id, // Return the original channel ID
+                    channelName: row.channel_name,
+                    guildId: row.guild_id,
+                    guildName: row.guild_name,
+                    relayedMessageId: row.relayed_message_id,
+                    isOriginal: false, // This indicates we found it via relayed message ID
+                    queriedMessageId: messageId // The ID that was actually queried
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error querying message ${messageId}:`, error.message);
+            return null;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Find original message by searching for any relayed message that might match
+     * This is useful when the relayed relationship wasn't stored but we want to find the original
+     * @param {string} relayedMessageId - Relayed message ID
+     * @param {string} content - Message content to help match
+     * @param {number} timestampRange - Time range in milliseconds to search within (default: 1 hour)
+     * @returns {Promise<Object|null>} - Original message data or null if not found
+     */
+    async findOriginalByContent(relayedMessageId, content, timestampRange = 3600000) {
+        const client = await this.pgPool.connect();
+        
+        try {
+            // Search for messages with similar content within a time range
+            // This is a fallback when the relayed relationship wasn't stored
+            const result = await client.query(`
+                SELECT id, channel_id, channel_name, guild_id, guild_name, created_at, relayed_message_id
+                FROM messages 
+                WHERE content = $1 
+                AND relayed_message_id IS NULL
+                AND created_at >= NOW() - INTERVAL '${Math.floor(timestampRange / 1000)} seconds'
+                ORDER BY created_at DESC
+                LIMIT 5
+            `, [content]);
+            
+            if (result.rows.length > 0) {
+                // Return the most recent match
+                const row = result.rows[0];
+                return {
+                    messageId: row.id,
+                    channelId: row.channel_id,
+                    channelName: row.channel_name,
+                    guildId: row.guild_id,
+                    guildName: row.guild_name,
+                    relayedMessageId: row.relayed_message_id,
+                    isOriginal: true,
+                    foundVia: 'content-match',
+                    queriedMessageId: relayedMessageId
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error searching for original message by content:`, error.message);
+            return null;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Update message with relayed message ID (with retry mechanism)
+     * @param {string} originalMessageId - Original Discord message ID
+     * @param {string} relayedMessageId - Relayed/webhook message ID
+     * @returns {Promise<boolean>} - Success status
+     */
+    async updateMessageRelayedId(originalMessageId, relayedMessageId) {
+        const maxRetries = 3;
+        const retryDelay = 500; // 500ms
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            const client = await this.pgPool.connect();
+            
+            try {
+                const result = await client.query(
+                    'UPDATE messages SET relayed_message_id = $1 WHERE id = $2 RETURNING id',
+                    [relayedMessageId, originalMessageId]
+                );
+                
+                if (result.rows.length > 0) {
+                    console.log(`[${this.instanceName}] Updated message ${originalMessageId} with relayed ID ${relayedMessageId} (attempt ${attempt})`);
+                    return true;
+                }
+                
+                if (attempt < maxRetries) {
+                    console.warn(`[${this.instanceName}] Message ${originalMessageId} not found for relationship update, retrying in ${retryDelay}ms (attempt ${attempt}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                } else {
+                    console.error(`[${this.instanceName}] Failed to update message relationship after ${maxRetries} attempts: message ${originalMessageId} not found in database`);
+                }
+                
+            } catch (error) {
+                console.error(`[${this.instanceName}] Error updating message relationship (attempt ${attempt}):`, error.message);
+                if (attempt === maxRetries) {
+                    return false;
+                }
+            } finally {
+                client.release();
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Manually set a relayed message relationship (useful for missing relationships)
+     * @param {string} originalMessageId - Original Discord message ID
+     * @param {string} relayedMessageId - Relayed/webhook message ID
+     * @returns {Promise<boolean>} - Success status
+     */
+    async setMessageRelationship(originalMessageId, relayedMessageId) {
+        const client = await this.pgPool.connect();
+        
+        try {
+            // First, try to update the original message with the relayed ID
+            let result = await client.query(
+                'UPDATE messages SET relayed_message_id = $1 WHERE id = $2 RETURNING id',
+                [relayedMessageId, originalMessageId]
+            );
+            
+            if (result.rows.length > 0) {
+                console.log(`[${this.instanceName}] Updated original message ${originalMessageId} with relayed ID ${relayedMessageId}`);
+                return true;
+            } else {
+                // If original message not found, log but don't fail
+                console.log(`[${this.instanceName}] Original message ${originalMessageId} not found in database, relationship noted but not stored`);
+                return false;
+            }
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error setting message relationship:`, error.message);
+            return false;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
      * Close database connections
      * @returns {Promise<void>}
      */
@@ -428,6 +649,159 @@ class DatabaseManager {
         if (this.pgPool) {
             await this.pgPool.end();
             console.log(`[${this.instanceName}] PostgreSQL connection pool closed`);
+        }
+    }
+
+    /**
+     * Find original message by relayed message ID
+     * @param {string} relayedMessageId - Relayed/webhook message ID
+     * @returns {Promise<Object|null>} - Original message data or null if not found
+     */
+    async findOriginalByRelayedId(relayedMessageId) {
+        const client = await this.pgPool.connect();
+        
+        try {
+            // Search for the original message that has this relayed message ID
+            const result = await client.query(
+                'SELECT id, channel_id, channel_name, guild_id, guild_name FROM messages WHERE relayed_message_id = $1 LIMIT 1',
+                [relayedMessageId]
+            );
+            
+            if (result.rows.length > 0) {
+                const row = result.rows[0];
+                return {
+                    messageId: row.id, // Original message ID
+                    channelId: row.channel_id, // Original channel ID
+                    channelName: row.channel_name,
+                    guildId: row.guild_id,
+                    guildName: row.guild_name,
+                    isOriginal: true,
+                    foundVia: 'relayed-id-lookup',
+                    queriedMessageId: relayedMessageId
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error finding original by relayed ID ${relayedMessageId}:`, error.message);
+            return null;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Immediately save a single message to the database (bypassing batching)
+     * This is useful when we need to ensure the message exists before performing operations on it
+     * @param {Object} messageData - Message data object
+     * @returns {Promise<boolean>} - Success status
+     */
+    async saveMessageImmediate(messageData) {
+        // Add instance name to message data
+        messageData.instanceName = this.instanceName;
+        
+        const client = await this.pgPool.connect();
+        
+        try {
+            const result = await client.query(`
+                INSERT INTO messages (
+                    id, channel_id, channel_name, guild_id, guild_name,
+                    author_id, author_display_name, content, message_data,
+                    relayed_message_id, original_message_id,
+                    created_at, updated_at, instance_name
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                ON CONFLICT (id) DO UPDATE SET
+                    content = EXCLUDED.content,
+                    updated_at = EXCLUDED.updated_at,
+                    message_data = EXCLUDED.message_data,
+                    author_display_name = EXCLUDED.author_display_name,
+                    relayed_message_id = EXCLUDED.relayed_message_id,
+                    original_message_id = EXCLUDED.original_message_id
+                RETURNING id
+            `, [
+                messageData.id,
+                messageData.channelId,
+                messageData.channelName,
+                messageData.guildId,
+                messageData.guildName,
+                messageData.authorId,
+                messageData.authorDisplayName,
+                messageData.content,
+                JSON.stringify(messageData.rawMessage || {}),
+                messageData.relayedMessageId || null,
+                messageData.originalMessageId || null,
+                new Date(messageData.createdAt),
+                messageData.updatedAt ? new Date(messageData.updatedAt) : null,
+                messageData.instanceName
+            ]);
+            
+            if (result.rows.length > 0) {
+                console.log(`[${this.instanceName}] Immediately saved message ${messageData.id} to database`);
+                
+                // Cache the message data if cache manager is available
+                if (this.cacheManager) {
+                    this.cacheManager.cacheMessage(messageData);
+                }
+                
+                this.performanceStats.dbOperations++;
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error immediately saving message:`, error.message);
+            return false;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Update an existing message without affecting relationship fields
+     * @param {Object} messageData - Message data object
+     * @returns {Promise<boolean>} - Success status
+     */
+    async updateMessageContent(messageData) {
+        // Add instance name to message data
+        messageData.instanceName = this.instanceName;
+        
+        const client = await this.pgPool.connect();
+        
+        try {
+            const result = await client.query(`
+                UPDATE messages SET
+                    content = $1,
+                    updated_at = $2,
+                    message_data = $3,
+                    author_display_name = $4
+                WHERE id = $5
+                RETURNING id
+            `, [
+                messageData.content,
+                messageData.updatedAt ? new Date(messageData.updatedAt) : new Date(),
+                JSON.stringify(messageData.rawMessage || {}),
+                messageData.authorDisplayName,
+                messageData.id
+            ]);
+            
+            if (result.rows.length > 0) {
+                console.log(`[${this.instanceName}] Updated message content for ${messageData.id} without affecting relationships`);
+                
+                // Cache the message data if cache manager is available
+                if (this.cacheManager) {
+                    this.cacheManager.cacheMessage(messageData);
+                }
+                
+                this.performanceStats.dbOperations++;
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error updating message content:`, error.message);
+            return false;
+        } finally {
+            client.release();
         }
     }
 }
