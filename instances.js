@@ -30,6 +30,7 @@ Commands:
   config <n>     - Show configuration path for an instance
   fetch-reactions <n> <message-id> [channel-id] - Fetch reactions for a message
   fetch-channels <n> [guild-id|guild-name] [--no-perms] - Fetch guild and channel lists with access status
+  search-user <n> <discord-id> - Search for a user by Discord ID across all guilds
 
 Examples:
   node instances.js create bot1
@@ -43,6 +44,7 @@ Examples:
   node instances.js fetch-channels bot1 123456789012345678
   node instances.js fetch-channels bot1 "INIT"
   node instances.js fetch-channels bot1 --no-perms
+  node instances.js search-user bot1 123456789012345678
 
 Instance configurations are stored in: ./configs/
 Instance databases are stored in: ./databases/
@@ -399,6 +401,131 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
     }
 }
 
+async function searchUser(instanceName, discordId) {
+    // Check if instance is running
+    const statuses = instanceManager.getInstancesStatus();
+    const instanceStatus = statuses.find(s => s.name === instanceName);
+    
+    if (!instanceStatus || !instanceStatus.running) {
+        console.error(`Instance ${instanceName} is not running. Please start it first.`);
+        return;
+    }
+
+    // Create commands directory if it doesn't exist
+    const commandsDir = path.join(__dirname, 'commands');
+    if (!fs.existsSync(commandsDir)) {
+        fs.mkdirSync(commandsDir, { recursive: true });
+    }
+
+    // Create command file
+    const commandId = `search-user-${Date.now()}`;
+    const commandFile = path.join(commandsDir, `${instanceName}-${commandId}.json`);
+    const resultFile = path.join(commandsDir, `${instanceName}-${commandId}-result.json`);
+
+    const command = {
+        type: 'search-user',
+        discordId: discordId,
+        timestamp: new Date().toISOString(),
+        resultFile: resultFile
+    };
+
+    try {
+        // Write command file
+        fs.writeFileSync(commandFile, JSON.stringify(command, null, 2));
+        console.log(`\n=== Searching User ===`);
+        console.log(`Instance: ${instanceName}`);
+        console.log(`Discord ID: ${discordId}`);
+        console.log(`Command sent, waiting for response...`);
+
+        // Wait for result file with timeout
+        const timeout = 30000; // 30 seconds
+        const startTime = Date.now();
+        
+        while (Date.now() - startTime < timeout) {
+            if (fs.existsSync(resultFile)) {
+                try {
+                    const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+                    
+                    // Clean up files
+                    try {
+                        if (fs.existsSync(commandFile)) {
+                            fs.unlinkSync(commandFile);
+                        }
+                        if (fs.existsSync(resultFile)) {
+                            fs.unlinkSync(resultFile);
+                        }
+                    } catch (cleanupError) {
+                        console.warn(`Warning: Could not clean up files: ${cleanupError.message}`);
+                    }
+
+                    if (result.error) {
+                        console.error(`\nError: ${result.error}`);
+                        return;
+                    }
+
+                    // Display search results
+                    console.log(`\n=== Search Results ===`);
+                    console.log(`Searching: ${result.discordId}`);
+                    console.log(`${result.message}\n`);
+
+                    if (result.guilds && result.guilds.length > 0) {
+                        result.guilds.forEach(guild => {
+                            console.log(`Guild: ${guild.guildName} (${guild.guildId}) displayName: ${guild.displayName}`);
+                            if (guild.status) {
+                                console.log(`  Status: ${guild.status}`);
+                            }
+                            if (guild.roles && guild.roles.length > 0) {
+                                console.log(`  Roles: ${guild.roles.join(', ')}`);
+                            } else {
+                                console.log(`  Roles: No roles or @everyone only`);
+                            }
+                            if (guild.lastSeen) {
+                                console.log(`  Last seen: ${new Date(guild.lastSeen).toLocaleString()}`);
+                            }
+                            if (guild.channels && guild.channels.length > 0) {
+                                console.log(`  Channels: ${guild.channels.map(ch => `#${ch.channelName}`).join(', ')}`);
+                            }
+                            console.log('');
+                        });
+                    }
+
+                    console.log(`=== Search completed ===`);
+                    return;
+                } catch (parseError) {
+                    console.error(`Error parsing result: ${parseError.message}`);
+                    // Clean up files on parse error
+                    try {
+                        if (fs.existsSync(commandFile)) {
+                            fs.unlinkSync(commandFile);
+                        }
+                        if (fs.existsSync(resultFile)) {
+                            fs.unlinkSync(resultFile);
+                        }
+                    } catch (cleanupError) {
+                        console.warn(`Warning: Could not clean up files after parse error: ${cleanupError.message}`);
+                    }
+                    return;
+                }
+            }
+            
+            // Check every 500ms
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Timeout reached
+        console.error('\nTimeout: No response received from instance within 30 seconds.');
+        console.error('Make sure the instance is running and responding properly.');
+        
+        // Clean up command file
+        if (fs.existsSync(commandFile)) {
+            fs.unlinkSync(commandFile);
+        }
+
+    } catch (error) {
+        console.error(`Error sending command: ${error.message}`);
+    }
+}
+
 async function main() {
     if (!command) {
         printUsage();
@@ -566,6 +693,25 @@ async function main() {
                 await fetchGuildChannels(instanceName, guildIdOrName, showPermissions);
                 break;
 
+            case 'search-user':
+                if (!instanceName) {
+                    console.error('Please provide an instance name');
+                    console.log('Usage: node instances.js search-user <instance-name> <discord-id>');
+                    return;
+                }
+                const discordId = args[2];
+                if (!discordId) {
+                    console.error('Please provide a Discord ID');
+                    console.log('Usage: node instances.js search-user <instance-name> <discord-id>');
+                    return;
+                }
+                if (!/^\d{17,19}$/.test(discordId)) {
+                    console.error('Invalid Discord ID format. Discord IDs should be 17-19 digits.');
+                    return;
+                }
+                await searchUser(instanceName, discordId);
+                break;
+
             default:
                 console.error(`Unknown command: ${command}`);
                 printUsage();
@@ -581,4 +727,4 @@ if (require.main === module) {
     main();
 }
 
-module.exports = { fetchReactions, fetchGuildChannels };
+module.exports = { fetchReactions, fetchGuildChannels, searchUser };

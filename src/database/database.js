@@ -804,6 +804,41 @@ class DatabaseManager {
             client.release();
         }
     }
+
+    /**
+     * Search for a user by Discord ID across all guilds
+     * @param {string} discordId - Discord user ID to search for
+     * @returns {Promise<Array>} - Array of guild information where user is found
+     */
+    async searchUserByDiscordId(discordId) {
+        const client = await this.pgPool.connect();
+        
+        try {
+            const result = await client.query(`
+                SELECT DISTINCT 
+                    guild_id, 
+                    guild_name, 
+                    display_name,
+                    channel_id,
+                    channel_name,
+                    status,
+                    COALESCE(roles, '{}') as roles,
+                    last_seen
+                FROM channel_members 
+                WHERE user_id = $1 
+                ORDER BY guild_name, last_seen DESC
+            `, [discordId]);
+            
+            console.log(`[${this.instanceName}] Found ${result.rows.length} guild entries for user ${discordId}`);
+            return result.rows;
+            
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error searching for user:`, error.message);
+            return [];
+        } finally {
+            client.release();
+        }
+    }
 }
 
 module.exports = DatabaseManager;

@@ -148,6 +148,25 @@ class CacheManager {
     }
 
     /**
+     * Update relayed guilds cache with new channel mappings
+     * @param {Object} client - Discord client
+     * @param {Map} channelWebhookMap - Channel ID to webhook URL mappings
+     */
+    updateRelayedGuilds(client, channelWebhookMap) {
+        this.clearRelayedGuilds();
+        
+        // Add guild IDs based on channel mappings
+        for (const channelId of channelWebhookMap.keys()) {
+            const channel = client.channels.cache.get(channelId);
+            if (channel && channel.guild) {
+                this.addRelayedGuild(channel.guild.id);
+            }
+        }
+        
+        console.log(`Updated relayed guilds cache with ${this.relayedGuildIds.size} guilds`);
+    }
+
+    /**
      * Get cache sizes for monitoring
      * @returns {Object} - Cache sizes
      */

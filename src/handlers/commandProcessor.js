@@ -93,6 +93,9 @@ class CommandProcessor {
                 case 'fetch-guild-channels':
                     result = await this.handleFetchGuildChannels(commandData);
                     break;
+                case 'search-user':
+                    result = await this.handleSearchUser(commandData);
+                    break;
                 default:
                     result = { error: `Unknown command type: ${commandData.type}` };
                     break;
@@ -640,6 +643,80 @@ class CommandProcessor {
             return permissions && permissions.has('VIEW_CHANNEL');
         } catch (error) {
             return false;
+        }
+    }
+
+    /**
+     * Handle search user command
+     * @param {Object} commandData - Command data containing discordId
+     * @returns {Promise<Object>} - Search results
+     */
+    async handleSearchUser(commandData) {
+        const { discordId } = commandData;
+        
+        try {
+            console.log(`[${this.instanceName}] Searching for user: ${discordId}`);
+            
+            if (!this.databaseManager) {
+                return { error: 'Database manager not available' };
+            }
+
+            // Search the database for the user
+            const userResults = await this.databaseManager.searchUserByDiscordId(discordId);
+            
+            if (userResults.length === 0) {
+                return { 
+                    success: true, 
+                    discordId,
+                    guilds: [],
+                    message: 'User not found in any guilds'
+                };
+            }
+
+            // Group results by guild to avoid duplicates
+            const guildMap = new Map();
+            
+            for (const result of userResults) {
+                const guildKey = result.guild_id;
+                
+                if (!guildMap.has(guildKey)) {
+                    guildMap.set(guildKey, {
+                        guildId: result.guild_id,
+                        guildName: result.guild_name,
+                        displayName: result.display_name,
+                        status: result.status,
+                        roles: result.roles || [],
+                        lastSeen: result.last_seen,
+                        channels: []
+                    });
+                }
+                
+                // Add channel info if available
+                const guild = guildMap.get(guildKey);
+                if (result.channel_id && !guild.channels.find(ch => ch.channelId === result.channel_id)) {
+                    guild.channels.push({
+                        channelId: result.channel_id,
+                        channelName: result.channel_name
+                    });
+                }
+            }
+
+            const guilds = Array.from(guildMap.values());
+            
+            console.log(`[${this.instanceName}] Found user in ${guilds.length} guilds`);
+            
+            return {
+                success: true,
+                discordId,
+                guilds,
+                message: `User found in ${guilds.length} guild${guilds.length !== 1 ? 's' : ''}`
+            };
+            
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error searching for user:`, error.message);
+            return { 
+                error: `Failed to search for user: ${error.message}` 
+            };
         }
     }
 
