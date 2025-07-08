@@ -36,3 +36,32 @@ databases/
 # Build files
 dist/
 build/
+
+# Command cleanup - temporary and old command files
+commands/temp_*
+commands/*_temp.js
+commands/fetch-reactions_*.js
+commands/manual_*.js
+
+# Manual test scripts
+set_relationship.js
+test_relationship.js
+manual_*.js
+
+# Backup files
+*.bak
+*.backup
+
+# Runtime generated files
+*.pid
+*.seed
+*.pid.lock
+commands/example-bot-fetch-reactions-1751943132282-result.json
+commands/example-bot-fetch-reactions-1751943308427-result.json
+commands/example-bot-fetch-reactions-1751943317914-result.json
+commands/example-bot-fetch-reactions-1751943326332-result.json
+commands/example-bot-fetch-reactions-1751943363299-result.json
+commands/example-bot-fetch-reactions-1751944787453-result.json
+commands/example-bot-fetch-reactions-1751945040365-result.json
+commands/example-bot-fetch-reactions-1751945075439-result.json
+commands/example-bot-fetch-reactions-1751946681190-result.json

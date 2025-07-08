@@ -59,30 +59,54 @@ class MessageHandler {
                 return;
             }
 
-            // Only process if we have a mapping
-            if (this.webhookManager.hasMapping(oldMessage.id)) {
-                console.log('Updating existing message via webhook');
-                const webhookUrl = this.channelWebhookMap.get(newMessage.channel.id);
-                if (webhookUrl) {
-                    this.webhookManager.sendToWebhook(
-                        newMessage,
-                        webhookUrl,
-                        (msg) => MessageUtils.resolveMentions(msg, this.cacheManager),
-                        MessageUtils.sanitizeMessage,
-                        MessageUtils.sanitizeEmbeds,
-                        true // isUpdate
-                    );
+            // Check if we have a webhook mapping for this channel
+            let webhookUrl = this.channelWebhookMap.get(newMessage.channel.id);
+            
+            // If no legacy mapping, check new pattern-based mappings
+            if (!webhookUrl && this.configManager) {
+                const mappingResult = this.configManager.getWebhookForChannel(
+                    newMessage.channel.id,
+                    newMessage.channel.name,
+                    newMessage.guild.id
+                );
+                
+                if (mappingResult) {
+                    webhookUrl = mappingResult.webhookUrl;
                 }
-            } else {
-                console.log('No mapping found for message update');
             }
             
-            this.saveMessageToDB(newMessage);
+            if (webhookUrl) {
+                console.log('Attempting to update message via webhook');
+                this.webhookManager.sendToWebhook(
+                    newMessage,
+                    webhookUrl,
+                    (msg) => MessageUtils.resolveMentions(msg, this.cacheManager),
+                    MessageUtils.sanitizeMessage,
+                    MessageUtils.sanitizeEmbeds,
+                    true // isUpdate
+                );
+            } else {
+                console.log('No webhook mapping found for message update');
+            }
+            
+            // Update message content in database without affecting relationship fields
+            this.updateMessageContentInDB(newMessage);
             this.performanceStats.messagesProcessed++;
         } catch (error) {
             console.error('Error processing messageUpdate:', error.message);
             this.performanceStats.errors++;
         }
+    }
+
+    /**
+     * Update message content in database without affecting relationship fields
+     * @param {Object} message - Discord message object
+     */
+    updateMessageContentInDB(message) {
+        if (!message.guild || !this.cacheManager.isRelayedGuild(message.guild.id)) return;
+
+        const messageData = MessageUtils.createMessageData(message);
+        this.databaseManager.updateMessageContent(messageData);
     }
 
     /**
@@ -105,12 +129,13 @@ class MessageHandler {
             return;
         }
 
-        // Process webhook and database operations in parallel
+        // Process webhook operations - they will handle database saving
         Promise.allSettled([
             this.sendToWebhookIfMapped(message),
-            this.checkEveryoneCatch(message),
-            Promise.resolve(this.saveMessageToDB(message))
+            this.checkEveryoneCatch(message)
         ]).then(() => {
+            // If no webhook was sent, save to database via batch
+            this.saveMessageToDBIfNeeded(message);
             this.performanceStats.messagesProcessed++;
         }).catch(error => {
             console.error('Error processing message:', error.message);
@@ -122,7 +147,7 @@ class MessageHandler {
      * Send message to webhook if mapping exists
      * @param {Object} message - Discord message object
      */
-    sendToWebhookIfMapped(message) {
+    async sendToWebhookIfMapped(message) {
         // First check legacy channel ID mappings
         let webhookUrl = this.channelWebhookMap.get(message.channel.id);
         let redactChannelName = false;
@@ -142,6 +167,19 @@ class MessageHandler {
         }
         
         if (webhookUrl) {
+            // Ensure the original message is saved to the database immediately
+            // before sending the webhook, so the relationship can be established
+            if (message.guild && this.cacheManager.isRelayedGuild(message.guild.id)) {
+                const messageData = MessageUtils.createMessageData(message);
+                await this.databaseManager.saveMessageImmediate(messageData);
+                
+                // Mark this message as already saved
+                if (!this.recentlySavedMessages) {
+                    this.recentlySavedMessages = new Set();
+                }
+                this.recentlySavedMessages.add(message.id);
+            }
+            
             this.webhookManager.sendToWebhook(
                 message,
                 webhookUrl,
@@ -173,6 +211,19 @@ class MessageHandler {
         if (hasEveryoneHere || hasRoleMentions) {
             console.log(`Everyone catch triggered in ${message.guild.name}#${message.channel.name}: @everyone=${message.content.includes('@everyone')}, @here=${message.content.includes('@here')}, roles=${message.mentions.roles.size}`);
             
+            // Ensure the original message is saved to the database immediately
+            // before sending the webhook, so the relationship can be established
+            if (message.guild && this.cacheManager.isRelayedGuild(message.guild.id)) {
+                const messageData = MessageUtils.createMessageData(message);
+                await this.databaseManager.saveMessageImmediate(messageData);
+                
+                // Mark this message as already saved
+                if (!this.recentlySavedMessages) {
+                    this.recentlySavedMessages = new Set();
+                }
+                this.recentlySavedMessages.add(message.id);
+            }
+            
             // Relay the message normally using the standard webhook format
             // Everyone catch messages always redact channel names for privacy
             this.webhookManager.sendToWebhook(
@@ -196,6 +247,30 @@ class MessageHandler {
 
         const messageData = MessageUtils.createMessageData(message);
         this.databaseManager.addMessageToBatch(messageData);
+    }
+
+    /**
+     * Save message to database if it hasn't been saved already
+     * @param {Object} message - Discord message object
+     */
+    saveMessageToDBIfNeeded(message) {
+        if (!message.guild || !this.cacheManager.isRelayedGuild(message.guild.id)) return;
+
+        // Check if message was already saved immediately (for webhook messages)
+        // We'll track this using a simple Set of recently saved message IDs
+        if (!this.recentlySavedMessages) {
+            this.recentlySavedMessages = new Set();
+        }
+
+        if (!this.recentlySavedMessages.has(message.id)) {
+            const messageData = MessageUtils.createMessageData(message);
+            this.databaseManager.addMessageToBatch(messageData);
+        }
+        
+        // Clean up old entries periodically
+        if (this.recentlySavedMessages.size > 1000) {
+            this.recentlySavedMessages.clear();
+        }
     }
 
     /**
