@@ -9,13 +9,14 @@ class CommandCleanup {
         this.commandsDir = commandsDir;
         this.maxAgeHours = 24; // Default: remove files older than 24 hours
         this.patterns = [
-            /.*-fetch-reactions-\d+-result\.json$/,  // fetch-reactions result files
-            /^temp_.*$/,                             // temp_ prefixed files
-            /.*_temp\.js$/,                          // _temp.js suffixed files
-            /^manual_.*$/,                           // manual_ prefixed files
-            /.*\.tmp$/,                              // .tmp files
-            /.*\.backup$/,                           // .backup files
-            /.*\.bak$/                               // .bak files
+            /.*-fetch-reactions-\d+-result\.json$/,     // fetch-reactions result files
+            /.*-fetch-guild-channels-\d+-result\.json$/, // fetch-guild-channels result files
+            /^temp_.*$/,                                 // temp_ prefixed files
+            /.*_temp\.js$/,                              // _temp.js suffixed files
+            /^manual_.*$/,                               // manual_ prefixed files
+            /.*\.tmp$/,                                  // .tmp files
+            /.*\.backup$/,                               // .backup files
+            /.*\.bak$/                                   // .bak files
         ];
     }
 

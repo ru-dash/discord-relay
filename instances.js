@@ -19,16 +19,17 @@ Usage:
   node instances.js <command> [instance-name] [options...]
 
 Commands:
-  create <name>     - Create a new instance configuration template
-  start <name>      - Start a specific instance
-  stop <name>       - Stop a specific instance
-  restart <name>    - Restart a specific instance
+  create <n>     - Create a new instance configuration template
+  start <n>      - Start a specific instance
+  stop <n>       - Stop a specific instance
+  restart <n>    - Restart a specific instance
   start-all         - Start all configured instances
   stop-all          - Stop all running instances
   list              - List all configured instances and their status
-  logs <name>       - Show logs for a specific instance
-  config <name>     - Show configuration path for an instance
-  fetch-reactions <name> <message-id> [channel-id] - Fetch reactions for a message
+  logs <n>       - Show logs for a specific instance
+  config <n>     - Show configuration path for an instance
+  fetch-reactions <n> <message-id> [channel-id] - Fetch reactions for a message
+  fetch-channels <n> [guild-id|guild-name] [--no-perms] - Fetch guild and channel lists with access status
 
 Examples:
   node instances.js create bot1
@@ -38,6 +39,10 @@ Examples:
   node instances.js logs bot1
   node instances.js fetch-reactions bot1 123456789012345678
   node instances.js fetch-reactions bot1 123456789012345678 987654321098765432
+  node instances.js fetch-channels bot1
+  node instances.js fetch-channels bot1 123456789012345678
+  node instances.js fetch-channels bot1 "INIT"
+  node instances.js fetch-channels bot1 --no-perms
 
 Instance configurations are stored in: ./configs/
 Instance databases are stored in: ./databases/
@@ -173,7 +178,190 @@ async function fetchReactions(instanceName, messageId, channelId) {
                     } else {
                         console.log('No reactions found on this message.');
                     }
+
+                    if (result.note) {
+                        console.log(`\nNote: ${result.note}`);
+                    }
+
+                    console.log(`\n=== Fetch completed ===`);
+                    return;
+                } catch (parseError) {
+                    console.error(`Error parsing result: ${parseError.message}`);
+                    // Clean up files on parse error
+                    try {
+                        if (fs.existsSync(commandFile)) {
+                            fs.unlinkSync(commandFile);
+                        }
+                        if (fs.existsSync(resultFile)) {
+                            fs.unlinkSync(resultFile);
+                        }
+                    } catch (cleanupError) {
+                        console.warn(`Warning: Could not clean up files after parse error: ${cleanupError.message}`);
+                    }
+                    return;
+                }
+            }
+            
+            // Check every 500ms
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Timeout reached
+        console.error('\nTimeout: No response received from instance within 30 seconds.');
+        console.error('Make sure the instance is running and responding properly.');
+        
+        // Clean up command file
+        if (fs.existsSync(commandFile)) {
+            fs.unlinkSync(commandFile);
+        }
+
+    } catch (error) {
+        console.error(`Error sending command: ${error.message}`);
+    }
+}
+
+async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions = true) {
+    // Check if the parameter is a guild ID (numbers only) or a guild name filter
+    let guildId = null;
+    let guildNameFilter = null;
+    
+    if (guildIdOrName) {
+        if (/^\d{17,19}$/.test(guildIdOrName)) {
+            // It's a valid Discord ID
+            guildId = guildIdOrName;
+        } else {
+            // It's a guild name filter
+            guildNameFilter = guildIdOrName;
+        }
+    }
+
+    // Check if instance is running
+    const statuses = instanceManager.getInstancesStatus();
+    const instanceStatus = statuses.find(s => s.name === instanceName);
+    
+    if (!instanceStatus || !instanceStatus.running) {
+        console.error(`Instance ${instanceName} is not running. Please start it first.`);
+        return;
+    }
+
+    // Create commands directory if it doesn't exist
+    const commandsDir = path.join(__dirname, 'commands');
+    if (!fs.existsSync(commandsDir)) {
+        fs.mkdirSync(commandsDir, { recursive: true });
+    }
+
+    // Create command file
+    const commandId = `fetch-guild-channels-${Date.now()}`;
+    const commandFile = path.join(commandsDir, `${instanceName}-${commandId}.json`);
+    const resultFile = path.join(commandsDir, `${instanceName}-${commandId}-result.json`);
+
+    const command = {
+        type: 'fetch-guild-channels',
+        guildId: guildId,
+        guildNameFilter: guildNameFilter,
+        showPermissions: showPermissions,
+        timestamp: new Date().toISOString(),
+        resultFile: resultFile
+    };
+
+    try {
+        // Write command file
+        fs.writeFileSync(commandFile, JSON.stringify(command, null, 2));
+        console.log(`\n=== Fetching Guild Channels ===`);
+        console.log(`Instance: ${instanceName}`);
+        if (guildId) {
+            console.log(`Guild ID: ${guildId}`);
+        } else if (guildNameFilter) {
+            console.log(`Guild Name Filter: "${guildNameFilter}"`);
+        } else {
+            console.log('Fetching all accessible guilds');
+        }
+        console.log(`Show Permissions: ${showPermissions ? 'Yes' : 'No'}`);
+        console.log(`Command sent, waiting for response...`);
+
+        // Wait for result file with timeout
+        const timeout = 30000; // 30 seconds
+        const startTime = Date.now();
+        
+        while (Date.now() - startTime < timeout) {
+            if (fs.existsSync(resultFile)) {
+                try {
+                    const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
                     
+                    // Clean up files
+                    try {
+                        if (fs.existsSync(commandFile)) {
+                            fs.unlinkSync(commandFile);
+                        }
+                        if (fs.existsSync(resultFile)) {
+                            fs.unlinkSync(resultFile);
+                        }
+                    } catch (cleanupError) {
+                        console.warn(`Warning: Could not clean up files: ${cleanupError.message}`);
+                    }
+
+                    if (result.error) {
+                        console.error(`\nError: ${result.error}`);
+                        return;
+                    }
+
+                    // Display guild channels with formatted output
+                    console.log(`\n=== Guild Channels (${result.totalGuilds} guild(s)) ===`);
+                    
+                    if (result.guilds && result.guilds.length > 0) {
+                        result.guilds.forEach(guild => {
+                            if (guild.error) {
+                                console.log(`\n${guild.name} | ERROR: ${guild.error}`);
+                                return;
+                            }
+
+                            console.log(`\n${guild.name} (${guild.id}) | (${guild.totalChannels} channels, ${guild.memberCount || 'unknown'} members)`);
+                            
+                            // Display categorized channels
+                            const categories = Object.values(guild.categories);
+                            categories.forEach(category => {
+                                if (category.channels.length > 0) {
+                                    console.log(`${category.name}\t|`);
+                                    category.channels.forEach(channel => {
+                                        const accessIcon = showPermissions ? 
+                                            (channel.hasAccess ? '✅' : '❌') : '⚪';
+                                        const lastMessageInfo = channel.lastMessageDate ? 
+                                            ` (${channel.id}, ${channel.lastMessageDate})` : 
+                                            ` (${channel.id})`;
+                                        console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}${lastMessageInfo}`);
+                                    });
+                                }
+                            });
+
+                            // Display uncategorized channels
+                            if (guild.uncategorizedChannels.length > 0) {
+                                console.log(`(Uncategorized)\t|`);
+                                guild.uncategorizedChannels.forEach(channel => {
+                                    const accessIcon = showPermissions ? 
+                                        (channel.hasAccess ? '✅' : '❌') : '⚪';
+                                    const lastMessageInfo = channel.lastMessageDate ? 
+                                        ` (${channel.id}, ${channel.lastMessageDate})` : 
+                                        ` (${channel.id})`;
+                                    console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}${lastMessageInfo}`);
+                                });
+                            }
+                        });
+                    } else {
+                        console.log('No guilds found.');
+                    }
+
+                    console.log(`\nLegend:`);
+                    if (showPermissions) {
+                        console.log(`✅ = Bot has access`);
+                        console.log(`❌ = Bot does not have access`);
+                    } else {
+                        console.log(`⚪ = Access status not checked`);
+                    }
+                    console.log(`# = Text channel`);
+                    console.log(`📢 = News/Announcement channel`);
+                    console.log(`🔊 = Voice channel`);
+                    console.log(`🎤 = Stage channel`);
+
                     console.log(`\n=== Fetch completed ===`);
                     return;
                 } catch (parseError) {
@@ -257,7 +445,12 @@ async function main() {
                     console.log('Usage: node instances.js stop <instance-name>');
                     return;
                 }
-                instanceManager.stopInstance(instanceName);
+                const stopped = instanceManager.stopInstance(instanceName);
+                if (stopped) {
+                    console.log(`Instance ${instanceName} stopped successfully`);
+                } else {
+                    console.log(`Instance ${instanceName} was not running or could not be stopped`);
+                }
                 break;
 
             case 'restart':
@@ -266,37 +459,60 @@ async function main() {
                     console.log('Usage: node instances.js restart <instance-name>');
                     return;
                 }
-                console.log(`Restarting instance: ${instanceName}`);
+                console.log(`Restarting instance ${instanceName}...`);
                 instanceManager.stopInstance(instanceName);
+                
+                // Wait a moment before restarting
                 setTimeout(() => {
-                    instanceManager.startInstance(instanceName);
-                }, 3000);
+                    const restartChild = instanceManager.startInstance(instanceName);
+                    if (restartChild) {
+                        console.log(`Instance ${instanceName} restarted successfully (PID: ${restartChild.pid})`);
+                    } else {
+                        console.log(`Failed to restart instance ${instanceName}`);
+                    }
+                }, 2000);
                 break;
 
             case 'start-all':
-                instanceManager.startAllInstances();
+                console.log('Starting all configured instances...');
+                const started = instanceManager.startAllInstances();
+                if (started.length > 0) {
+                    console.log(`Started ${started.length} instance(s): ${started.join(', ')}`);
+                } else {
+                    console.log('No instances were started (they may already be running or have no configurations)');
+                }
                 break;
 
             case 'stop-all':
-                instanceManager.stopAllInstances();
+                console.log('Stopping all running instances...');
+                const stoppedList = instanceManager.stopAllInstances();
+                if (stoppedList.length > 0) {
+                    console.log(`Stopped ${stoppedList.length} instance(s): ${stoppedList.join(', ')}`);
+                } else {
+                    console.log('No running instances found to stop');
+                }
                 break;
 
             case 'list':
                 const statuses = instanceManager.getInstancesStatus();
-                console.log('\n=== Instance Status ===');
                 if (statuses.length === 0) {
-                    console.log('No instances configured. Use "node instances.js create <name>" to create one.');
+                    console.log('No instance configurations found in ./configs/');
+                    console.log('Use "node instances.js create <name>" to create a new instance.');
                 } else {
+                    console.log('\n=== Instance Status ===');
                     statuses.forEach(status => {
                         const runningStatus = status.running ? '✓ RUNNING' : '✗ STOPPED';
-                        const pidInfo = status.pid ? ` (PID: ${status.pid})` : '';
-                        const startTime = status.startTime ? ` (since ${status.startTime.toLocaleString()})` : '';
-                        const statusInfo = status.status && status.status !== 'stopped' ? ` [${status.status.toUpperCase()}]` : '';
-                        
-                        console.log(`${status.name}: ${runningStatus}${pidInfo}${statusInfo}${startTime}`);
-                        console.log(`  Config: ${status.configPath}`);
-                        console.log(`  Logs: ${status.logFile}`);
-                        if (status.errorLogFile && fs.existsSync(status.errorLogFile)) {
+                        console.log(`  ${status.name}: ${runningStatus}`);
+                        if (status.pid) {
+                            console.log(`    PID: ${status.pid}`);
+                        }
+                        if (status.configFile) {
+                            console.log(`    Config: ${status.configFile}`);
+                        }
+                        if (status.logFile) {
+                            console.log(`    Logs: ${status.logFile}`);
+                        }
+                        if (status.errorLogFile) {
                             console.log(`  Errors: ${status.errorLogFile}`);
                         }
                         console.log('');
@@ -339,6 +555,17 @@ async function main() {
                 await fetchReactions(instanceName, messageId, channelId);
                 break;
 
+            case 'fetch-channels':
+                if (!instanceName) {
+                    console.error('Please provide an instance name');
+                    console.log('Usage: node instances.js fetch-channels <instance-name> [guild-id|guild-name] [--no-perms]');
+                    return;
+                }
+                const guildIdOrName = args[2] && !args[2].startsWith('--') ? args[2] : null;
+                const showPermissions = !args.includes('--no-perms');
+                await fetchGuildChannels(instanceName, guildIdOrName, showPermissions);
+                break;
+
             default:
                 console.error(`Unknown command: ${command}`);
                 printUsage();
@@ -350,24 +577,8 @@ async function main() {
     }
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-    console.log('\nShutting down all instances...');
-    instanceManager.stopAllInstances();
-    setTimeout(() => {
-        process.exit(0);
-    }, 5000);
-});
+if (require.main === module) {
+    main();
+}
 
-process.on('SIGTERM', () => {
-    console.log('\nShutting down all instances...');
-    instanceManager.stopAllInstances();
-    setTimeout(() => {
-        process.exit(0);
-    }, 5000);
-});
-
-main().catch(error => {
-    console.error('Fatal error:', error);
-    process.exit(1);
-});
+module.exports = { fetchReactions, fetchGuildChannels };
