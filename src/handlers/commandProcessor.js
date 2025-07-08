@@ -90,6 +90,9 @@ class CommandProcessor {
                 case 'fetch-reactions':
                     result = await this.handleFetchReactions(commandData);
                     break;
+                case 'fetch-guild-channels':
+                    result = await this.handleFetchGuildChannels(commandData);
+                    break;
                 default:
                     result = { error: `Unknown command type: ${commandData.type}` };
                     break;
@@ -415,6 +418,249 @@ class CommandProcessor {
         ];
         
         return webhookPatterns.some(pattern => channelName.includes(pattern));
+    }
+
+    /**
+     * Handle fetch-guild-channels command
+     * @param {Object} commandData - Command data
+     * @returns {Object} - Result object
+     */
+    async handleFetchGuildChannels(commandData) {
+        try {
+            const { guildId, guildNameFilter, showPermissions = true } = commandData;
+            console.log(`[${this.instanceName}] Fetching guild channels${guildId ? ` for guild ${guildId}` : guildNameFilter ? ` for guilds containing "${guildNameFilter}"` : ' for all accessible guilds'}`);
+
+            const guilds = [];
+            let targetGuilds;
+            
+            if (guildId) {
+                // Specific guild ID
+                targetGuilds = [this.client.guilds.cache.get(guildId)].filter(Boolean);
+            } else if (guildNameFilter) {
+                // Filter by guild name (case insensitive)
+                targetGuilds = Array.from(this.client.guilds.cache.values())
+                    .filter(guild => guild.name.toLowerCase().includes(guildNameFilter.toLowerCase()));
+            } else {
+                // All guilds
+                targetGuilds = Array.from(this.client.guilds.cache.values());
+            }
+
+            if (targetGuilds.length === 0) {
+                return { error: guildId ? `Guild ${guildId} not found or not accessible` : 
+                    guildNameFilter ? `No guilds found containing "${guildNameFilter}"` : 'No accessible guilds found' };
+            }
+
+            for (const guild of targetGuilds) {
+                try {
+                    console.log(`[${this.instanceName}] Processing guild: ${guild.name} (${guild.id})`);
+                    
+                    // Get all channels
+                    const channels = Array.from(guild.channels.cache.values())
+                        .filter(channel => 
+                            channel.type === 'GUILD_TEXT' || 
+                            channel.type === 'GUILD_NEWS' || 
+                            channel.type === 'GUILD_VOICE' ||
+                            channel.type === 'GUILD_STAGE_VOICE' ||
+                            channel.type === 'GUILD_CATEGORY'
+                        )
+                        .sort((a, b) => {
+                            // Sort by position, then by name
+                            if (a.position !== b.position) {
+                                return a.position - b.position;
+                            }
+                            return a.name.localeCompare(b.name);
+                        });
+
+                    // Group channels by category
+                    const categorizedChannels = {};
+                    const uncategorizedChannels = [];
+
+                    for (const channel of channels) {
+                        if (channel.type === 'GUILD_CATEGORY') {
+                            categorizedChannels[channel.id] = {
+                                name: channel.name,
+                                position: channel.position,
+                                channels: []
+                            };
+                        } else if (channel.parentId && categorizedChannels[channel.parentId]) {
+                            const hasAccess = showPermissions ? this.checkChannelAccess(channel) : true;
+                            const lastMessageInfo = await this.getLastMessageInfo(channel);
+                            categorizedChannels[channel.parentId].channels.push({
+                                id: channel.id,
+                                name: channel.name,
+                                type: this.getChannelTypeSymbol(channel.type),
+                                hasAccess: hasAccess,
+                                position: channel.position,
+                                lastMessageId: lastMessageInfo.id,
+                                lastMessageDate: lastMessageInfo.date
+                            });
+                        } else if (channel.type !== 'GUILD_CATEGORY') {
+                            const hasAccess = showPermissions ? this.checkChannelAccess(channel) : true;
+                            const lastMessageInfo = await this.getLastMessageInfo(channel);
+                            uncategorizedChannels.push({
+                                id: channel.id,
+                                name: channel.name,
+                                type: this.getChannelTypeSymbol(channel.type),
+                                hasAccess: hasAccess,
+                                position: channel.position,
+                                lastMessageId: lastMessageInfo.id,
+                                lastMessageDate: lastMessageInfo.date
+                            });
+                        }
+                    }
+
+                    // Sort channels within categories
+                    Object.values(categorizedChannels).forEach(category => {
+                        category.channels.sort((a, b) => a.position - b.position);
+                    });
+                    uncategorizedChannels.sort((a, b) => a.position - b.position);
+
+                    const guildData = {
+                        id: guild.id,
+                        name: guild.name,
+                        memberCount: guild.memberCount,
+                        categories: categorizedChannels,
+                        uncategorizedChannels: uncategorizedChannels,
+                        totalChannels: channels.filter(ch => ch.type !== 'GUILD_CATEGORY').length
+                    };
+
+                    guilds.push(guildData);
+                    console.log(`[${this.instanceName}] Processed ${guildData.totalChannels} channels in guild ${guild.name}`);
+
+                } catch (error) {
+                    console.error(`[${this.instanceName}] Error processing guild ${guild.name}:`, error.message);
+                    guilds.push({
+                        id: guild.id,
+                        name: guild.name,
+                        error: `Failed to process guild: ${error.message}`
+                    });
+                }
+            }
+
+            const result = {
+                guilds: guilds,
+                totalGuilds: guilds.length,
+                showPermissions: showPermissions,
+                timestamp: new Date().toISOString()
+            };
+
+            console.log(`[${this.instanceName}] Successfully fetched channels for ${guilds.length} guild(s)`);
+            return result;
+
+        } catch (error) {
+            console.error(`[${this.instanceName}] Error in handleFetchGuildChannels:`, error.message);
+            return { error: `Failed to fetch guild channels: ${error.message}` };
+        }
+    }
+
+    /**
+     * Get last message information for a channel
+     * @param {Object} channel - Discord channel object
+     * @returns {Object} - Object containing last message ID and formatted date
+     */
+    async getLastMessageInfo(channel) {
+        try {
+            // Skip voice channels as they don't have messages
+            if (channel.type === 'GUILD_VOICE' || channel.type === 'GUILD_STAGE_VOICE') {
+                return { id: null, date: null };
+            }
+
+            const lastMessageId = channel.lastMessageId;
+            if (!lastMessageId) {
+                return { id: null, date: null };
+            }
+
+            // Try to get the message to get the actual timestamp
+            let messageDate = null;
+            try {
+                const message = await channel.messages.fetch(lastMessageId);
+                messageDate = this.formatDateToUTC(message.createdAt);
+            } catch (error) {
+                // If we can't fetch the message, try to extract date from snowflake
+                try {
+                    const timestamp = this.snowflakeToTimestamp(lastMessageId);
+                    messageDate = this.formatDateToUTC(new Date(timestamp));
+                } catch (snowflakeError) {
+                    messageDate = "Unknown date";
+                }
+            }
+
+            return {
+                id: lastMessageId,
+                date: messageDate
+            };
+        } catch (error) {
+            return { id: null, date: null };
+        }
+    }
+
+    /**
+     * Convert Discord snowflake to timestamp
+     * @param {string} snowflake - Discord snowflake ID
+     * @returns {number} - Timestamp in milliseconds
+     */
+    snowflakeToTimestamp(snowflake) {
+        const DISCORD_EPOCH = 1420070400000; // Discord epoch (January 1, 2015)
+        return parseInt(snowflake) / 4194304 + DISCORD_EPOCH;
+    }
+
+    /**
+     * Format date to UTC string
+     * @param {Date} date - Date object
+     * @returns {string} - Formatted date string
+     */
+    formatDateToUTC(date) {
+        if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+            return "Invalid date";
+        }
+
+        const options = {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'UTC'
+        };
+
+        return date.toLocaleDateString('en-US', options);
+    }
+
+    /**
+     * Check if bot has access to a channel
+     * @param {Object} channel - Discord channel object
+     * @returns {boolean} - True if bot can view the channel
+     */
+    checkChannelAccess(channel) {
+        try {
+            const guild = channel.guild;
+            const botMember = guild.members.cache.get(this.client.user.id);
+            
+            if (!botMember) return false;
+            
+            const permissions = channel.permissionsFor(botMember);
+            return permissions && permissions.has('VIEW_CHANNEL');
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Get symbol for channel type
+     * @param {string} channelType - Discord channel type
+     * @returns {string} - Symbol representing the channel type
+     */
+    getChannelTypeSymbol(channelType) {
+        switch (channelType) {
+            case 'GUILD_TEXT':
+                return '#';
+            case 'GUILD_NEWS':
+                return '📢';
+            case 'GUILD_VOICE':
+                return '🔊';
+            case 'GUILD_STAGE_VOICE':
+                return '🎤';
+            default:
+                return '?';
+        }
     }
 
     // ...existing code...

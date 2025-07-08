@@ -1,0 +1,644 @@
+{
+  "guilds": [
+    {
+      "id": "1293029136578773004",
+      "name": "Militant Industrialists LLC",
+      "memberCount": 244,
+      "categories": {
+        "1372676913646010530": {
+          "name": "pings",
+          "position": 0,
+          "channels": [
+            {
+              "id": "1345568741341007924",
+              "name": "hall-of-fame",
+              "type": "#",
+              "hasAccess": false,
+              "position": 1,
+              "lastMessageId": "1391952176867311627",
+              "lastMessageDate": "July 8, 2025"
+            },
+            {
+              "id": "1293029579753263135",
+              "name": "wall-of-shame",
+              "type": "#",
+              "hasAccess": false,
+              "position": 2,
+              "lastMessageId": "1391997335407689750",
+              "lastMessageDate": "July 8, 2025"
+            },
+            {
+              "id": "1355246539425054739",
+              "name": "regional-activity",
+              "type": "#",
+              "hasAccess": false,
+              "position": 3,
+              "lastMessageId": "1392001113238147138",
+              "lastMessageDate": "July 8, 2025"
+            }
+          ]
+        },
+        "1298344654088966154": {
+          "name": "Public",
+          "position": 1,
+          "channels": [
+            {
+              "id": "1349751601610625034",
+              "name": "recruitment",
+              "type": "#",
+              "hasAccess": true,
+              "position": 1,
+              "lastMessageId": "1355600314040062022",
+              "lastMessageDate": "March 29, 2025"
+            },
+            {
+              "id": "1349751674373406821",
+              "name": "diplo",
+              "type": "#",
+              "hasAccess": true,
+              "position": 2,
+              "lastMessageId": "1355599707849756712",
+              "lastMessageDate": "March 29, 2025"
+            }
+          ]
+        },
+        "1349726992613900420": {
+          "name": "🗂 Hiring Area",
+          "position": 2,
+          "channels": [
+            {
+              "id": "1390579620470067352",
+              "name": "onboarding-0249",
+              "type": "#",
+              "hasAccess": false,
+              "position": 2,
+              "lastMessageId": "1391707270567432242",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391102455269425242",
+              "name": "ticket-0251",
+              "type": "#",
+              "hasAccess": false,
+              "position": 3,
+              "lastMessageId": "1391800293842485310",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391129069147652106",
+              "name": "ticket-0253",
+              "type": "#",
+              "hasAccess": false,
+              "position": 4,
+              "lastMessageId": "1391800359034425516",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391178053509578882",
+              "name": "authed-0254",
+              "type": "#",
+              "hasAccess": false,
+              "position": 5,
+              "lastMessageId": "1391929083335540826",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391483256813129791",
+              "name": "ticket-0259",
+              "type": "#",
+              "hasAccess": false,
+              "position": 6,
+              "lastMessageId": "1391914486780264478",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391490434643132456",
+              "name": "ticket-0260",
+              "type": "#",
+              "hasAccess": false,
+              "position": 7,
+              "lastMessageId": "1391869299777343499",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391537003966890165",
+              "name": "ticket-0261",
+              "type": "#",
+              "hasAccess": false,
+              "position": 8,
+              "lastMessageId": "1391912837269557258",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391563977603022938",
+              "name": "ticket-0262",
+              "type": "#",
+              "hasAccess": false,
+              "position": 9,
+              "lastMessageId": "1391804421834412172",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391613866705948693",
+              "name": "ticket-0263",
+              "type": "#",
+              "hasAccess": false,
+              "position": 10,
+              "lastMessageId": "1391792413223157893",
+              "lastMessageDate": "July 7, 2025"
+            },
+            {
+              "id": "1391796286180561006",
+              "name": "ticket-0266",
+              "type": "#",
+              "hasAccess": false,
+              "position": 11,
+              "lastMessageId": "1391969614056919232",
+              "lastMessageDate": "July 8, 2025"
+            },
+            {
+              "id": "1391864614903484426",
+              "name": "ticket-0267",
+              "type": "#",
+              "hasAccess": false,
+              "position": 12,
+              "lastMessageId": "1391867279527903274",
+              "lastMessageDate": "July 7, 2025"
+            }
+          ]
+        },
+        "1349754398896558120": {
+          "name": "Diplo Area",
+          "position": 3,
+          "channels": [
+            {
+              "id": "1391862741358350538",
+              "name": "ticket-0009",
+              "type": "#",
+              "hasAccess": false,
+              "position": 3,
+              "lastMessageId": "1391864588932354179",
+              "lastMessageDate": "July 7, 2025"
+            }
+          ]
+        },
+        "1351497620526469131": {
+          "name": "IT Support",
+          "position": 4,
+          "channels": []
+        },
+        "1293029137170042913": {
+          "name": "Public Voice (NO OPSEC)",
+          "position": 5,
+          "channels": []
+        },
+        "1351362609999515680": {
+          "name": "Voice (Corp & Allies)",
+          "position": 6,
+          "channels": []
+        },
+        "1293029137170042910": {
+          "name": "General",
+          "position": 7,
+          "channels": []
+        },
+        "1309896244377817220": {
+          "name": "corp-discussion",
+          "position": 8,
+          "channels": []
+        },
+        "1298344828479864864": {
+          "name": "corp-important",
+          "position": 9,
+          "channels": []
+        },
+        "1350145788453322882": {
+          "name": "Archived",
+          "position": 10,
+          "channels": [
+            {
+              "id": "1327106031620460604",
+              "name": "faction-warfare",
+              "type": "#",
+              "hasAccess": false,
+              "position": 10,
+              "lastMessageId": "1329304056010899549",
+              "lastMessageDate": "January 16, 2025"
+            },
+            {
+              "id": "1369020622172196975",
+              "name": "special-op-babaroga",
+              "type": "#",
+              "hasAccess": false,
+              "position": 11,
+              "lastMessageId": "1375506358459432970",
+              "lastMessageDate": "May 23, 2025"
+            }
+          ]
+        }
+      },
+      "uncategorizedChannels": [
+        {
+          "id": "1293030238934138961",
+          "name": "corp-chat",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1390683647635619962",
+          "lastMessageDate": "July 4, 2025"
+        },
+        {
+          "id": "1332356634957320262",
+          "name": "corp-rules",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1332807281586339991",
+          "lastMessageDate": "January 25, 2025"
+        },
+        {
+          "id": "1351498254533263503",
+          "name": "create-a-ticket",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1355601505801076918",
+          "lastMessageDate": "March 29, 2025"
+        },
+        {
+          "id": "1387548825388060905",
+          "name": "hiring-chat",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1391973057060409364",
+          "lastMessageDate": "July 8, 2025"
+        },
+        {
+          "id": "1371511051342053427",
+          "name": "Meeting",
+          "type": "🔊",
+          "hasAccess": true,
+          "position": 0,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1293029684916916337",
+          "name": "pings",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1390431656673939466",
+          "lastMessageDate": "July 3, 2025"
+        },
+        {
+          "id": "1293029137170042914",
+          "name": "Public",
+          "type": "🔊",
+          "hasAccess": true,
+          "position": 0,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1326739584566038592",
+          "name": "public-open-chat",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1391962662665195542",
+          "lastMessageDate": "July 8, 2025"
+        },
+        {
+          "id": "1381727953540612252",
+          "name": "ticket-0005",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1384331284930760774",
+          "lastMessageDate": "June 17, 2025"
+        },
+        {
+          "id": "1370383579124731914",
+          "name": "ticket-archive",
+          "type": "#",
+          "hasAccess": false,
+          "position": 0,
+          "lastMessageId": "1391848488010256475",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1293029137170042911",
+          "name": "welcome",
+          "type": "#",
+          "hasAccess": true,
+          "position": 0,
+          "lastMessageId": "1391880714483400785",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1293031172108189787",
+          "name": "AFK",
+          "type": "🔊",
+          "hasAccess": true,
+          "position": 1,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1293029137170042912",
+          "name": "clips-and-highlights",
+          "type": "#",
+          "hasAccess": true,
+          "position": 1,
+          "lastMessageId": "1391550057714810941",
+          "lastMessageDate": "July 6, 2025"
+        },
+        {
+          "id": "1301912788158906409",
+          "name": "corp-announcements",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1391033991926255787",
+          "lastMessageDate": "July 5, 2025"
+        },
+        {
+          "id": "1314618372272554056",
+          "name": "corp-projects",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1377843169554858004",
+          "lastMessageDate": "May 30, 2025"
+        },
+        {
+          "id": "1309896431909212222",
+          "name": "pvp",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1385681073454973038",
+          "lastMessageDate": "June 20, 2025"
+        },
+        {
+          "id": "1371527256689741834",
+          "name": "Quiet/DND",
+          "type": "🔊",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1378423857366565035",
+          "name": "ticket-0005",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1379880713498792016",
+          "lastMessageDate": "June 4, 2025"
+        },
+        {
+          "id": "1381736476148105218",
+          "name": "ticket-0006",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1381742285800341525",
+          "lastMessageDate": "June 9, 2025"
+        },
+        {
+          "id": "1390526047455543361",
+          "name": "ticket-0248",
+          "type": "#",
+          "hasAccess": false,
+          "position": 1,
+          "lastMessageId": "1391800052166692936",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1293029495321788446",
+          "name": "corp-info",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1381772776502722580",
+          "lastMessageDate": "June 9, 2025"
+        },
+        {
+          "id": "1298345607185956864",
+          "name": "mining",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1383129444884938863",
+          "lastMessageDate": "June 13, 2025"
+        },
+        {
+          "id": "1293030028853903391",
+          "name": "opsec",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1382372526880981142",
+          "lastMessageDate": "June 11, 2025"
+        },
+        {
+          "id": "1326006062830190627",
+          "name": "Recruitment",
+          "type": "🔊",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1293029544982220982",
+          "name": "shitposting",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1391692035466989700",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1384594763914678343",
+          "name": "ticket-0008",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1385413434929188995",
+          "lastMessageDate": "June 20, 2025"
+        },
+        {
+          "id": "1391861149766779001",
+          "name": "ticket-0008",
+          "type": "#",
+          "hasAccess": false,
+          "position": 2,
+          "lastMessageId": "1391865089694630042",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1301915445288243251",
+          "name": "corp-taxes",
+          "type": "#",
+          "hasAccess": false,
+          "position": 3,
+          "lastMessageId": "1391927651869917254",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1300611024818278523",
+          "name": "fits",
+          "type": "#",
+          "hasAccess": false,
+          "position": 3,
+          "lastMessageId": "1387332882606981242",
+          "lastMessageDate": "June 25, 2025"
+        },
+        {
+          "id": "1300109382612422708",
+          "name": "Officer",
+          "type": "🔊",
+          "hasAccess": false,
+          "position": 3,
+          "lastMessageId": null,
+          "lastMessageDate": null
+        },
+        {
+          "id": "1309897447279038646",
+          "name": "other-games",
+          "type": "#",
+          "hasAccess": false,
+          "position": 3,
+          "lastMessageId": "1391457904045068550",
+          "lastMessageDate": "July 6, 2025"
+        },
+        {
+          "id": "1314591866729267291",
+          "name": "ratting",
+          "type": "#",
+          "hasAccess": false,
+          "position": 3,
+          "lastMessageId": "1383106705545625632",
+          "lastMessageDate": "June 13, 2025"
+        },
+        {
+          "id": "1332364707503538206",
+          "name": "corp-absences",
+          "type": "#",
+          "hasAccess": false,
+          "position": 4,
+          "lastMessageId": "1391808610434158713",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1349874404212998254",
+          "name": "corp-it-guides",
+          "type": "#",
+          "hasAccess": false,
+          "position": 4,
+          "lastMessageId": "1370317219657023568",
+          "lastMessageDate": "May 9, 2025"
+        },
+        {
+          "id": "1293029751505813554",
+          "name": "industry",
+          "type": "#",
+          "hasAccess": false,
+          "position": 4,
+          "lastMessageId": "1384522678320496700",
+          "lastMessageDate": "June 17, 2025"
+        },
+        {
+          "id": "1375109535441883266",
+          "name": "music",
+          "type": "#",
+          "hasAccess": false,
+          "position": 4,
+          "lastMessageId": "1385671865720377549",
+          "lastMessageDate": "June 20, 2025"
+        },
+        {
+          "id": "1324765433513115831",
+          "name": "board-of-directors",
+          "type": "#",
+          "hasAccess": false,
+          "position": 5,
+          "lastMessageId": "1391972463499411466",
+          "lastMessageDate": "July 8, 2025"
+        },
+        {
+          "id": "1368881417370599485",
+          "name": "important-auth-not-compliant",
+          "type": "#",
+          "hasAccess": false,
+          "position": 5,
+          "lastMessageId": "1391926552270213190",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1326648345871257732",
+          "name": "planetary-interaction",
+          "type": "#",
+          "hasAccess": false,
+          "position": 5,
+          "lastMessageId": "1384521746027118632",
+          "lastMessageDate": "June 17, 2025"
+        },
+        {
+          "id": "1333907710764253245",
+          "name": "corp-management",
+          "type": "#",
+          "hasAccess": false,
+          "position": 6,
+          "lastMessageId": "1391864194403536938",
+          "lastMessageDate": "July 7, 2025"
+        },
+        {
+          "id": "1293029812843188268",
+          "name": "market-trade",
+          "type": "#",
+          "hasAccess": false,
+          "position": 6,
+          "lastMessageId": "1389438897154555947",
+          "lastMessageDate": "July 1, 2025"
+        },
+        {
+          "id": "1302831313270734909",
+          "name": "services",
+          "type": "#",
+          "hasAccess": false,
+          "position": 7,
+          "lastMessageId": "1384522440948060191",
+          "lastMessageDate": "June 17, 2025"
+        },
+        {
+          "id": "1295338826016751616",
+          "name": "recruitment-old",
+          "type": "#",
+          "hasAccess": false,
+          "position": 8,
+          "lastMessageId": "1350064275645005864",
+          "lastMessageDate": "March 14, 2025"
+        },
+        {
+          "id": "1293041619322536066",
+          "name": "diplo-old",
+          "type": "#",
+          "hasAccess": false,
+          "position": 9,
+          "lastMessageId": "1347688301402001479",
+          "lastMessageDate": "March 7, 2025"
+        }
+      ],
+      "totalChannels": 63
+    }
+  ],
+  "totalGuilds": 1,
+  "showPermissions": true,
+  "timestamp": "2025-07-08T04:40:30.438Z"
+}

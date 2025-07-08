@@ -29,7 +29,7 @@ Commands:
   logs <n>       - Show logs for a specific instance
   config <n>     - Show configuration path for an instance
   fetch-reactions <n> <message-id> [channel-id] - Fetch reactions for a message
-  fetch-channels <n> [guild-id|guild-name] [--no-perms] - Fetch guild and channel lists with access status
+  fetch-channels <n> [guild-id] [--no-perms] - Fetch guild and channel lists with access status
 
 Examples:
   node instances.js create bot1
@@ -41,7 +41,6 @@ Examples:
   node instances.js fetch-reactions bot1 123456789012345678 987654321098765432
   node instances.js fetch-channels bot1
   node instances.js fetch-channels bot1 123456789012345678
-  node instances.js fetch-channels bot1 "INIT"
   node instances.js fetch-channels bot1 --no-perms
 
 Instance configurations are stored in: ./configs/
@@ -220,19 +219,12 @@ async function fetchReactions(instanceName, messageId, channelId) {
     }
 }
 
-async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions = true) {
-    // Check if the parameter is a guild ID (numbers only) or a guild name filter
-    let guildId = null;
-    let guildNameFilter = null;
-    
-    if (guildIdOrName) {
-        if (/^\d{17,19}$/.test(guildIdOrName)) {
-            // It's a valid Discord ID
-            guildId = guildIdOrName;
-        } else {
-            // It's a guild name filter
-            guildNameFilter = guildIdOrName;
-        }
+async function fetchGuildChannels(instanceName, guildId, showPermissions = true) {
+    // Validate guild ID format if provided
+    if (guildId && !/^\d{17,19}$/.test(guildId)) {
+        console.error('Invalid guild ID format. Discord guild IDs should be 17-19 digit numbers.');
+        console.log('Example: 123456789012345678');
+        return;
     }
 
     // Check if instance is running
@@ -258,7 +250,6 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
     const command = {
         type: 'fetch-guild-channels',
         guildId: guildId,
-        guildNameFilter: guildNameFilter,
         showPermissions: showPermissions,
         timestamp: new Date().toISOString(),
         resultFile: resultFile
@@ -271,8 +262,6 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
         console.log(`Instance: ${instanceName}`);
         if (guildId) {
             console.log(`Guild ID: ${guildId}`);
-        } else if (guildNameFilter) {
-            console.log(`Guild Name Filter: "${guildNameFilter}"`);
         } else {
             console.log('Fetching all accessible guilds');
         }
@@ -315,7 +304,7 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
                                 return;
                             }
 
-                            console.log(`\n${guild.name} (${guild.id}) | (${guild.totalChannels} channels, ${guild.memberCount || 'unknown'} members)`);
+                            console.log(`\n${guild.name} | (${guild.totalChannels} channels, ${guild.memberCount || 'unknown'} members)`);
                             
                             // Display categorized channels
                             const categories = Object.values(guild.categories);
@@ -325,10 +314,7 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
                                     category.channels.forEach(channel => {
                                         const accessIcon = showPermissions ? 
                                             (channel.hasAccess ? '✅' : '❌') : '⚪';
-                                        const lastMessageInfo = channel.lastMessageDate ? 
-                                            ` (${channel.id}, ${channel.lastMessageDate})` : 
-                                            ` (${channel.id})`;
-                                        console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}${lastMessageInfo}`);
+                                        console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}`);
                                     });
                                 }
                             });
@@ -339,10 +325,7 @@ async function fetchGuildChannels(instanceName, guildIdOrName, showPermissions =
                                 guild.uncategorizedChannels.forEach(channel => {
                                     const accessIcon = showPermissions ? 
                                         (channel.hasAccess ? '✅' : '❌') : '⚪';
-                                    const lastMessageInfo = channel.lastMessageDate ? 
-                                        ` (${channel.id}, ${channel.lastMessageDate})` : 
-                                        ` (${channel.id})`;
-                                    console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}${lastMessageInfo}`);
+                                    console.log(`\t\t|\t${accessIcon} ${channel.type}${channel.name}`);
                                 });
                             }
                         });
@@ -558,12 +541,12 @@ async function main() {
             case 'fetch-channels':
                 if (!instanceName) {
                     console.error('Please provide an instance name');
-                    console.log('Usage: node instances.js fetch-channels <instance-name> [guild-id|guild-name] [--no-perms]');
+                    console.log('Usage: node instances.js fetch-channels <instance-name> [guild-id] [--no-perms]');
                     return;
                 }
-                const guildIdOrName = args[2] && !args[2].startsWith('--') ? args[2] : null;
+                const guildId = args[2] && !args[2].startsWith('--') ? args[2] : null;
                 const showPermissions = !args.includes('--no-perms');
-                await fetchGuildChannels(instanceName, guildIdOrName, showPermissions);
+                await fetchGuildChannels(instanceName, guildId, showPermissions);
                 break;
 
             default:

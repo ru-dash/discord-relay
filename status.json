@@ -1,11 +1,11 @@
 {
   "example-bot": {
-    "pid": 10644,
+    "pid": 19580,
     "status": "running",
     "configPath": "C:\\Users\\jvand\\OneDrive\\Desktop\\discord-relay\\configs\\example-bot.json",
     "logFile": "C:\\Users\\jvand\\OneDrive\\Desktop\\discord-relay\\logs\\example-bot.log",
     "errorLogFile": "C:\\Users\\jvand\\OneDrive\\Desktop\\discord-relay\\logs\\example-bot_error.log",
-    "startTime": "2025-07-08T04:00:09.852Z",
-    "lastUpdated": "2025-07-08T04:00:09.852Z"
+    "startTime": "2025-07-08T04:37:22.704Z",
+    "lastUpdated": "2025-07-08T04:37:22.705Z"
   }
 }
