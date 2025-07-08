@@ -102,7 +102,12 @@ class CacheManager {
      * @returns {boolean} - True if duplicate
      */
     isDuplicateContent(message) {
-        const contentHash = this.getContentHash(message.content || '');
+        // Import MessageUtils for zero-width character handling
+        const MessageUtils = require('../utils/messageUtils');
+        
+        // Remove zero-width characters for consistent duplicate detection
+        const cleanContent = MessageUtils.removeZeroWidthChars(message.content || '');
+        const contentHash = this.getContentHash(cleanContent);
         const key = `${message.author.id}-${contentHash}`;
         const now = Date.now();
         

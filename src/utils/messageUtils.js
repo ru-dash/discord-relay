@@ -20,7 +20,10 @@ class MessageUtils {
             return cached;
         }
 
-        let content = message.content.replace(USER_MENTION_REGEX, (match, userId) => {
+        // Remove zero-width characters first
+        let content = MessageUtils.removeZeroWidthChars(message.content);
+
+        content = content.replace(USER_MENTION_REGEX, (match, userId) => {
             const user = message.guild.members.cache.get(userId);
             return user ? `@${user.displayName || user.user.username}` : match;
         });
@@ -36,12 +39,39 @@ class MessageUtils {
     }
 
     /**
+     * Remove zero-width characters from content
+     * @param {string} content - Message content
+     * @returns {string} - Content with zero-width characters removed
+     */
+    static removeZeroWidthChars(content) {
+        if (!content) return content;
+        
+        // Remove various zero-width characters
+        // \u200B - Zero Width Space
+        // \u200C - Zero Width Non-Joiner
+        // \u200D - Zero Width Joiner
+        // \u2060 - Word Joiner
+        // \uFEFF - Zero Width No-Break Space (BOM)
+        // \u061C - Arabic Letter Mark
+        // \u180E - Mongolian Vowel Separator
+        return content.replace(/[\u200B\u200C\u200D\u2060\uFEFF\u061C\u180E]/g, '');
+    }
+
+    /**
      * Sanitize message content
      * @param {string} content - Message content
      * @returns {string} - Sanitized content
      */
     static sanitizeMessage(content) {
         if (!content) return content;
+
+        // First remove zero-width characters
+        content = MessageUtils.removeZeroWidthChars(content);
+        
+        // Check if content is empty or only whitespace after removing zero-width chars
+        if (!content || content.trim() === '') {
+            return '[Message contained only zero-width characters]';
+        }
 
         // Insert zero-width spaces into URLs to break hyperlinks
         content = content.replace(URL_REGEX, (url) => {
@@ -61,7 +91,7 @@ class MessageUtils {
      */
     static sanitizeEmbeds(embeds) {
         return embeds.map(embed => ({
-            title: embed.title,
+            title: MessageUtils.sanitizeMessage(embed.title),
             description: MessageUtils.sanitizeMessage(embed.description),
             fields: embed.fields ? embed.fields.map(field => ({
                 name: MessageUtils.sanitizeMessage(field.name),
@@ -81,6 +111,16 @@ class MessageUtils {
      * @returns {Object} - Message data object
      */
     static createMessageData(message) {
+        // Clean the content of zero-width characters for database storage
+        let cleanContent = message.content;
+        if (cleanContent) {
+            cleanContent = MessageUtils.removeZeroWidthChars(cleanContent);
+            // If content becomes empty after removing zero-width chars, store a placeholder
+            if (cleanContent.trim() === '') {
+                cleanContent = '[Message contained only zero-width characters]';
+            }
+        }
+
         return {
             id: message.id,
             channelId: message.channel.id,
@@ -89,7 +129,7 @@ class MessageUtils {
             guildName: message.guild.name,
             authorId: message.author.id,
             authorDisplayName: message.member?.displayName || message.author.username,
-            content: message.content || null,
+            content: cleanContent || null,
             createdAt: message.createdTimestamp,
             updatedAt: message.editedTimestamp || null,
         };

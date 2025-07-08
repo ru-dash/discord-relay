@@ -203,13 +203,15 @@ class MessageHandler {
         if (!everyoneCatchWebhook) return;
 
         // Check for @everyone or @here mentions
-        const hasEveryoneHere = message.content.includes('@everyone') || message.content.includes('@here');
+        // Remove zero-width characters first to ensure proper detection
+        const cleanContent = MessageUtils.removeZeroWidthChars(message.content || '');
+        const hasEveryoneHere = cleanContent.includes('@everyone') || cleanContent.includes('@here');
         
         // Check for role mentions
         const hasRoleMentions = message.mentions.roles.size > 0;
 
         if (hasEveryoneHere || hasRoleMentions) {
-            console.log(`Everyone catch triggered in ${message.guild.name}#${message.channel.name}: @everyone=${message.content.includes('@everyone')}, @here=${message.content.includes('@here')}, roles=${message.mentions.roles.size}`);
+            console.log(`Everyone catch triggered in ${message.guild.name}#${message.channel.name}: @everyone=${cleanContent.includes('@everyone')}, @here=${cleanContent.includes('@here')}, roles=${message.mentions.roles.size}`);
             
             // Ensure the original message is saved to the database immediately
             // before sending the webhook, so the relationship can be established
