@@ -52,16 +52,10 @@ manual_*.js
 *.bak
 *.backup
 
+# Command files and results (temporary files for inter-process communication)
+commands/
+
 # Runtime generated files
 *.pid
 *.seed
 *.pid.lock
-commands/example-bot-fetch-reactions-1751943132282-result.json
-commands/example-bot-fetch-reactions-1751943308427-result.json
-commands/example-bot-fetch-reactions-1751943317914-result.json
-commands/example-bot-fetch-reactions-1751943326332-result.json
-commands/example-bot-fetch-reactions-1751943363299-result.json
-commands/example-bot-fetch-reactions-1751944787453-result.json
-commands/example-bot-fetch-reactions-1751945040365-result.json
-commands/example-bot-fetch-reactions-1751945075439-result.json
-commands/example-bot-fetch-reactions-1751946681190-result.json
