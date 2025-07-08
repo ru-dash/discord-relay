@@ -1,5 +1,7 @@
 # Discord Relay Bot
 
+I used Ai to generate a temporary readme. This will be updated soon(tm).
+
 A robust2. **Database Setup**
    ```bash
    # Run the PostgreSQL setup script
