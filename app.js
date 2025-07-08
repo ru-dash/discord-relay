@@ -361,6 +361,9 @@ class DiscordRelayBot {
             // Setup Discord client
             this.setupClient();
             
+            // Setup config watching and change handling
+            this.setupConfigWatching();
+            
             // Register components for graceful shutdown
             this.components.shutdownManager.registerComponents(this.components, this.config);
             
@@ -379,6 +382,94 @@ class DiscordRelayBot {
                 process.exit(1);
             }
         }
+    }
+
+    /**
+     * Setup config file watching and change handling
+     */
+    setupConfigWatching() {
+        // Start watching config files
+        this.components.configManager.startWatching();
+        
+        // Handle config changes
+        this.components.configManager.on('configChanged', (event) => {
+            this.handleConfigChange(event);
+        });
+    }
+
+    /**
+     * Handle configuration changes
+     */
+    handleConfigChange(event) {
+        const { oldConfig, newConfig, changes } = event;
+        
+        console.log('Configuration changed, updating components...');
+        
+        // Check if there are any changes at all
+        if (Object.keys(changes).length === 0) {
+            console.log('No actual changes detected in config');
+            return;
+        }
+        
+        // Update the main config reference
+        this.config = newConfig;
+        
+        // Check for critical changes that require restart
+        if (changes.token) {
+            console.warn('Token changed! This requires a bot restart to take effect.');
+            console.warn('The bot will continue with the old token until manually restarted.');
+        }
+        
+        // Update channel mappings if they changed
+        if (changes.channelMappings) {
+            const channelWebhookMap = this.components.configManager.getChannelMappings();
+            this.components.messageHandler.setChannelMappings(channelWebhookMap);
+            
+            // Re-populate relayed guild IDs cache
+            this.components.cacheManager.updateRelayedGuilds(
+                this.components.client,
+                channelWebhookMap
+            );
+            
+            // Fetch members for new channels
+            newConfig.channelMappings.forEach(mapping => {
+                if (mapping.channelId) {
+                    this.components.memberManager.fetchAndSaveChannelMembers(
+                        mapping.channelId,
+                        this.components.client
+                    );
+                }
+            });
+            
+            console.log('Channel mappings updated');
+        }
+        
+        // Update webhook URLs if eventHook changed
+        if (changes.eventHook) {
+            console.log('Event hook URL updated');
+        }
+        
+        // Update database settings if they changed
+        if (changes.database) {
+            console.log('Database settings updated (requires restart for full effect)');
+        }
+        
+        // Update system hook if it changed
+        if (changes.systemHook) {
+            console.log('System hook URL updated');
+        }
+        
+        // Update everyoneCatch settings if they changed
+        if (changes.everyoneCatch) {
+            console.log('Everyone catch settings updated');
+        }
+        
+        // Update bot name/agent name if they changed
+        if (changes.botName || changes.agentName) {
+            console.log('Bot/agent name updated');
+        }
+        
+        console.log('Configuration update complete');
     }
 }
 

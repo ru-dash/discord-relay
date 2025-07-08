@@ -1,10 +1,15 @@
 const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('events');
 
-class ConfigManager {
+class ConfigManager extends EventEmitter {
     constructor(configPath) {
+        super();
         this.configPath = configPath || path.join(__dirname, '../../config.json');
         this.globalSettingsPath = path.join(__dirname, '../../settings.json');
+        this.fileWatcher = null;
+        this.globalWatcher = null;
+        this.watchEnabled = false;
         this.defaultConfig = { 
             botName: 'example-bot',
             token: '', 
@@ -248,6 +253,173 @@ class ConfigManager {
      */
     getEveryoneCatchMappings() {
         return this.config.everyoneCatch || [];
+    }
+
+    /**
+     * Start watching config files for changes
+     */
+    startWatching() {
+        if (this.watchEnabled) {
+            console.log('Config watching is already enabled');
+            return;
+        }
+
+        this.watchEnabled = true;
+        console.log('Starting config file watching...');
+
+        try {
+            // Watch the main config file
+            if (fs.existsSync(this.configPath)) {
+                this.fileWatcher = fs.watch(this.configPath, { persistent: false }, (eventType, filename) => {
+                    if (eventType === 'change') {
+                        console.log(`Config file changed: ${filename}`);
+                        this.reloadConfig();
+                    }
+                });
+                console.log(`Watching config file: ${this.configPath}`);
+            }
+
+            // Watch the global settings file
+            if (fs.existsSync(this.globalSettingsPath)) {
+                this.globalWatcher = fs.watch(this.globalSettingsPath, { persistent: false }, (eventType, filename) => {
+                    if (eventType === 'change') {
+                        console.log(`Global settings file changed: ${filename}`);
+                        this.reloadConfig();
+                    }
+                });
+                console.log(`Watching global settings file: ${this.globalSettingsPath}`);
+            }
+
+            // Handle watcher errors
+            if (this.fileWatcher) {
+                this.fileWatcher.on('error', (error) => {
+                    console.error('Config file watcher error:', error.message);
+                    this.stopWatching();
+                });
+            }
+
+            if (this.globalWatcher) {
+                this.globalWatcher.on('error', (error) => {
+                    console.error('Global settings file watcher error:', error.message);
+                    this.stopWatching();
+                });
+            }
+
+        } catch (error) {
+            console.error('Failed to start config file watching:', error.message);
+            this.stopWatching();
+        }
+    }
+
+    /**
+     * Stop watching config files
+     */
+    stopWatching() {
+        if (!this.watchEnabled) return;
+
+        console.log('Stopping config file watching...');
+        this.watchEnabled = false;
+
+        if (this.fileWatcher) {
+            this.fileWatcher.close();
+            this.fileWatcher = null;
+        }
+
+        if (this.globalWatcher) {
+            this.globalWatcher.close();
+            this.globalWatcher = null;
+        }
+    }
+
+    /**
+     * Reload configuration from files
+     */
+    reloadConfig() {
+        console.log('Reloading configuration...');
+        
+        // Add a small delay to ensure file write is complete
+        setTimeout(() => {
+            try {
+                const oldConfig = { ...this.config };
+                
+                // Load bot-specific config
+                const configFileContent = fs.readFileSync(this.configPath, 'utf8');
+                const botConfig = JSON.parse(configFileContent);
+                
+                // Load global settings
+                const globalSettings = this.loadGlobalSettings();
+                
+                // Merge global settings with bot config
+                this.config = {
+                    ...botConfig,
+                    // Add global settings
+                    systemHook: globalSettings.systemHook || '',
+                    database: globalSettings.database || {},
+                    // Use botName for both agentName and instanceName for backward compatibility
+                    agentName: botConfig.botName || 'example-bot',
+                    instanceName: botConfig.botName || 'example-bot'
+                };
+                
+                // Validate the new config
+                this.validateConfig(this.config);
+                
+                console.log('Configuration reloaded successfully');
+                console.log(`Bot: ${this.config.botName} (${this.config.agentName})`);
+                
+                // Get detailed changes
+                const changes = this.getConfigChanges(oldConfig, this.config);
+                
+                // Log changes for debugging
+                if (Object.keys(changes).length > 0) {
+                    console.log('Configuration changes detected:');
+                    Object.keys(changes).forEach(key => {
+                        console.log(`  ${key}: ${JSON.stringify(changes[key].old)} -> ${JSON.stringify(changes[key].new)}`);
+                    });
+                } else {
+                    console.log('No configuration changes detected');
+                }
+                
+                // Emit config changed event
+                this.emit('configChanged', {
+                    oldConfig,
+                    newConfig: this.config,
+                    changes
+                });
+                
+            } catch (error) {
+                console.error('Failed to reload configuration:', error.message);
+                console.error('Keeping previous configuration');
+            }
+        }, 100); // 100ms delay
+    }
+
+    /**
+     * Compare two config objects and return differences
+     */
+    getConfigChanges(oldConfig, newConfig) {
+        const changes = {};
+        
+        // Check for changed values
+        for (const key of Object.keys(newConfig)) {
+            if (JSON.stringify(oldConfig[key]) !== JSON.stringify(newConfig[key])) {
+                changes[key] = {
+                    old: oldConfig[key],
+                    new: newConfig[key]
+                };
+            }
+        }
+        
+        // Check for removed values
+        for (const key of Object.keys(oldConfig)) {
+            if (!(key in newConfig)) {
+                changes[key] = {
+                    old: oldConfig[key],
+                    new: undefined
+                };
+            }
+        }
+        
+        return changes;
     }
 }
 

@@ -158,6 +158,11 @@ class ShutdownManager {
         console.log('[ShutdownManager] Cleaning up components...');
         
         try {
+            // Stop config file watchers
+            if (this.components.configManager) {
+                this.components.configManager.stopWatching();
+            }
+            
             // Clear all intervals
             if (this.components.webhookManager) {
                 // Webhook manager handles its own intervals internally
