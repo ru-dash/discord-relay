@@ -1,251 +1,238 @@
-# Discord Relay Bot
+# Discord Relay
 
-I used Ai to generate a temporary readme. This will be updated soon(tm).
+> [!IMPORTANT]
+> **This project is archived.** It has not been actively used or maintained since mid-2025, and no further updates, fixes, or support are planned. The code is left available for reference under the MIT License. It depends on libraries and Discord behaviour that may have changed since then, so expect to do some work if you want to run it today.
 
-A robust2. **Database Setup**
-   ```bash
-   # Run the PostgreSQL setup script
-   node utils/setup-postgresql.js
-   ```ord bot for relaying messages between channels with PostgreSQL storage, automatic crash recovery, and comprehensive error handling.
+Discord Relay forwards messages from selected Discord channels to Discord webhooks. It runs one or more accounts as separate instances, stores messages and member data in PostgreSQL, and restarts itself after crashes.
 
-**Disclaimer:** Discord does not encourage the use of selfbots, so there is some risk of a ban!
+> [!WARNING]
+> This project is built on [`discord.js-selfbot-v13`](https://github.com/aiko-chan-ai/discord.js-selfbot-v13). Automating a user account violates Discord's Terms of Service and can result in the account being banned. Use it at your own risk.
+
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running](#running)
+- [Instance commands](#instance-commands)
+- [Operational notes](#operational-notes)
+- [Project structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
-* **Message Relay**: Relay messages from specific channels to Discord webhooks
-* **Event Monitoring**: Track member events (joins/leaves, role changes) and channel updates
-* **Poll Support**: Automatically relay Discord polls with voting options and results
-* **PostgreSQL Database**: Persistent storage for messages, members, and events
-* **In-Memory Caching**: Fast access with configurable RAM limits and TTL
-* **Auto-Restart System**: Automatic recovery from crashes with smart error detection
-* **Member Synchronization**: Periodic member list updates and lazy loading
-* **System Notifications**: Critical error alerts via webhook notifications
-* **Robust Error Handling**: Graceful shutdown and restart prevention for unrecoverable errors
-* **Performance Monitoring**: Built-in performance statistics and logging
-* **Poll Relay**: Discord polls are converted to rich embeds showing options, vote counts, and expiry times with links back to the original poll for voting
+- **Message relay** — forward messages from specific channels to webhooks, matched by channel ID or by channel name pattern.
+- **Mass-mention alerts** — relay any message containing `@everyone`, `@here`, or a role mention from an entire guild.
+- **Channel name redaction** — hide the source channel name in relayed messages.
+- **Poll relay** — convert Discord polls into embeds showing options, vote counts, and expiry, with a link back to the original poll.
+- **Event monitoring** — report member joins and leaves, role changes, and channel updates to a separate webhook.
+- **PostgreSQL storage** — persist messages, channel members, instance state, and performance metrics.
+- **In-memory cache** — LRU cache with a memory cap and TTL-based expiry.
+- **Multi-instance management** — create, start, stop, and inspect several instances from one CLI.
+- **Automatic restart** — recover from crashes, while refusing to loop on errors that cannot be fixed by restarting.
+- **Live configuration reload** — pick up changes to configuration files without a restart.
+- **System notifications** — send critical errors, such as an invalid token, to a system webhook.
 
-## Quick Setup
+## Requirements
 
-1. **Prerequisites**
-   - Node.js 16+ from [nodejs.org](https://nodejs.org/)
-   - PostgreSQL 12+ server
+- [Node.js](https://nodejs.org/) 16 or later
+- PostgreSQL 12 or later
 
-2. **Installation**
-   ```bash
-   git clone https://github.com/yourusername/discord-relay.git
-   cd discord-relay
-   npm install
-   ```
+## Installation
 
-3. **Database Setup**
-   ```bash
-   # Run the PostgreSQL setup script
-   node setup-postgresql.js
-   ```
+```bash
+git clone https://github.com/ru-dash/discord-relay.git
+cd discord-relay
+npm install
+```
 
-4. **Configuration**
-   - Copy `configs/example-bot.json` to `configs/your-bot.json`
-   - Update global settings in `settings.json`:
-     ```json
-     {
-       "global": {
-         "systemHook": "https://discord.com/api/webhooks/...",
-         "database": {
-           "postgresql": {
-             "host": "localhost",
-             "port": 5432,
-             "database": "discord_relay",
-             "user": "discord_bot",
-             "password": "your_password"
-           }
-         }
-       }
-     }
-     ```
-   - Update your bot configuration:
-     ```json
-     {
-       "botName": "your-bot",
-       "token": "YOUR_DISCORD_TOKEN",
-       "eventHook": "https://discord.com/api/webhooks/...",
-       "channelMappings": [
-         {
-           "channelId": "CHANNEL_ID_TO_MONITOR",
-           "webhookUrl": "https://discord.com/api/webhooks/..."
-         }
-       ]
-     }
-     ```
+Create an empty PostgreSQL database and a user that owns it. The required tables are created automatically on first start.
 
-5. **Start the Bot**
-   ```bash
-   # Regular start
-   node app.js configs/your-bot.json
-   
-   # With auto-restart (recommended)
-   node process-manager.js configs/your-bot.json
-   ```
+```sql
+CREATE USER discord_bot WITH PASSWORD 'your_password';
+CREATE DATABASE discord_relay OWNER discord_bot;
+```
 
-## Configuration Reference
+## Configuration
 
-### Global Settings (`settings.json`)
-Contains shared configuration used by all bot instances:
-- `systemHook`: Webhook for critical error notifications (invalid token, etc.)
-- `database`: PostgreSQL connection settings shared by all bots
+Configuration is split into global settings shared by every instance and one file per instance.
 
-### Bot Configuration (`configs/bot-name.json`)
-Each bot instance has its own configuration file:
-- `botName`: Unique identifier for this bot (used as both agent and instance name)
-- `token`: Discord bot/selfbot token
-- `eventHook`: Webhook for member events (joins, leaves, role changes)
-- `channelMappings`: Array of channel-to-webhook mappings
+### Global settings (`settings.json`)
 
-### Legacy Support
-The system maintains backward compatibility with:
-- `agentName` and `instanceName` (now combined into `botName`)
-- Individual `systemHook` and `database` in bot configs (overrides global settings)
-
-### Channel Mappings
-Each mapping relays messages from a source channel to a webhook. Supports both exact channel IDs and channel name patterns:
-
-#### By Channel ID (Legacy)
 ```json
 {
-  "channelId": "123456789",
+  "global": {
+    "systemHook": "https://discord.com/api/webhooks/...",
+    "database": {
+      "postgresql": {
+        "host": "localhost",
+        "port": 5432,
+        "database": "discord_relay",
+        "user": "discord_bot",
+        "password": "your_password",
+        "ssl": false
+      }
+    }
+  }
+}
+```
+
+| Key | Description |
+| --- | --- |
+| `systemHook` | Webhook that receives critical error notifications. |
+| `database.postgresql` | Connection settings used by all instances. |
+
+### Instance configuration (`configs/<name>.json`)
+
+Generate a template with `node instances.js create <name>`, then fill it in. The `configs/` directory is git-ignored because these files contain account tokens.
+
+```json
+{
+  "botName": "my-relay",
+  "token": "YOUR_DISCORD_TOKEN",
+  "eventHook": "https://discord.com/api/webhooks/...",
+  "channelMappings": [
+    {
+      "channelId": "123456789012345678",
+      "webhookUrl": "https://discord.com/api/webhooks/..."
+    }
+  ],
+  "everyoneCatch": []
+}
+```
+
+| Key | Required | Description |
+| --- | --- | --- |
+| `botName` | No | Unique name for the instance. Defaults to `example-bot`. |
+| `token` | Yes | Discord account token. |
+| `eventHook` | No | Webhook for member and channel events. |
+| `channelMappings` | Yes | List of channel-to-webhook mappings. |
+| `everyoneCatch` | No | List of guild-wide mass-mention mappings. |
+
+The older `agentName` and `instanceName` keys are still accepted; both are now derived from `botName`.
+
+### Channel mappings
+
+Map a channel by ID:
+
+```json
+{
+  "channelId": "123456789012345678",
   "webhookUrl": "https://discord.com/api/webhooks/..."
 }
 ```
 
-#### By Channel Name Pattern (New)
+Or by name pattern within a guild. `guildId` is required when `channelName` is used.
+
 ```json
 {
-  "guildId": "987654321",
+  "guildId": "987654321098765432",
   "channelName": "ping*",
   "webhookUrl": "https://discord.com/api/webhooks/...",
   "redactChannelName": true
 }
 ```
 
-#### Channel Name Redaction
-Add `"redactChannelName": true` to any mapping to hide the actual channel name in relayed messages:
-- **Normal**: `Username #secret-intel-channel`
-- **Redacted**: `Username #[redacted]`
+| Pattern | Matches |
+| --- | --- |
+| `general` | Exact name, case-insensitive |
+| `ping*` | Names starting with `ping` |
+| `*ping` | Names ending with `ping` |
+| `*intel*` | Names containing `intel` |
+| `"exact-name"` | Exact name, quoted for special characters |
 
-This is useful for sensitive channels where you want to relay content but hide the channel name for operational security.
+Setting `"redactChannelName": true` replaces the channel name in relayed messages, so `Username #secret-channel` is shown as `Username #[redacted]`.
 
-#### Supported Channel Name Patterns
-- `"general"` - Exact match (case-insensitive)
-- `"ping*"` - Starts with "ping"
-- `"*intel*"` - Contains "intel"
-- `"*ping"` - Ends with "ping"
-- `"\"exact-name\""` - Exact match with quotes for special characters
+### Mass-mention alerts
 
-#### Everyone Catch (Mass Mention Alerts)
-Monitor for @everyone, @here, or role mentions across entire guilds:
 ```json
 {
   "everyoneCatch": [
     {
-      "guildId": "987654321",
+      "guildId": "987654321098765432",
       "webhookUrl": "https://discord.com/api/webhooks/..."
     }
   ]
 }
 ```
 
-This feature relays messages containing mass mentions using the standard message format. Channel names are automatically redacted as `#[redacted]` for everyone catch messages to protect sensitive channel information.
+Channel names are always redacted in messages relayed this way.
 
-## Auto-Restart System
+## Running
 
-The bot includes an intelligent auto-restart system that:
+Run a single instance directly:
 
-- **Always Active**: No configuration needed, always enabled
-- **Smart Error Detection**: Prevents restart loops for unrecoverable errors
-- **System Notifications**: Sends webhook alerts before stopping on critical errors
-- **Graceful Recovery**: Properly cleans up resources before restarting
-
-### Non-Restartable Errors
-The system automatically detects and stops restarting for:
-- Invalid tokens
-- Missing permissions
-- Unauthorized access
-- Expired or revoked tokens
-
-When these errors occur, a notification is sent to the `systemHook` before stopping.
-
-## Performance & Monitoring
-
-### In-Memory Cache
-- Configurable RAM limits (default: 50MB)
-- LRU eviction policy
-- TTL-based expiration
-- Automatic cleanup
-
-### Member Synchronization
-- Periodic full member sync (every 4 hours)
-- Event-driven updates for real-time changes
-- Batch database operations for efficiency
-
-### Logging
-- Structured console logging
-- Error and activity logs in `/logs` directory
-- Performance statistics tracking
-
-## Process Management
-
-### Using Process Manager (Recommended)
 ```bash
-# Start with auto-restart
-node process-management/process-manager.js configs/your-bot.json
-
-# Monitor multiple instances
-node process-management/instance-monitor.js
+node app.js configs/my-relay.json
 ```
 
-### Manual Start
-```bash
-# Basic start
-node app.js configs/your-bot.json
+Run it under the process manager to restart automatically after a crash:
 
-# With custom log level
-LOG_LEVEL=debug node app.js configs/your-bot.json
+```bash
+node process-management/process-manager.js configs/my-relay.json
+```
+
+If no configuration path is given, `app.js` uses `config.json` in the project root.
+
+## Instance commands
+
+`instances.js` manages multiple instances. Configurations are read from `configs/` and logs are written to `logs/`.
+
+| Command | Description |
+| --- | --- |
+| `node instances.js create <name>` | Create a configuration template. |
+| `node instances.js start <name>` | Start an instance. |
+| `node instances.js stop <name>` | Stop an instance. |
+| `node instances.js restart <name>` | Restart an instance. |
+| `node instances.js start-all` | Start every configured instance. |
+| `node instances.js stop-all` | Stop every running instance. |
+| `node instances.js list` | List instances and their status. |
+| `node instances.js logs <name>` | Show the last 50 log lines for an instance. |
+| `node instances.js config <name>` | Show the configuration path for an instance. |
+| `node instances.js fetch-reactions <name> <message-id> [channel-id]` | Fetch the reactions on a message. |
+| `node instances.js fetch-channels <name> [guild-id\|guild-name] [--no-perms]` | List guilds and channels with access status. |
+| `node instances.js search-user <name> <discord-id>` | Search for a user across all guilds. |
+
+Several of these are also available as npm scripts, including `npm run start-all`, `npm run stop-all`, and `npm run status`.
+
+## Operational notes
+
+**Automatic restart.** The process manager restarts an instance after a crash, but stops and notifies `systemHook` when the cause cannot be resolved by restarting: an invalid, expired, or revoked token, missing permissions, or unauthorized access.
+
+**Automatic updates.** A running instance checks this repository's GitHub releases hourly and installs newer versions automatically. This cannot be turned off through configuration. As the project is archived, no further releases are expected.
+
+**Caching.** The in-memory cache is limited to 50 MB by default and evicts the least recently used entries first.
+
+**Command files.** Instance commands communicate with running instances through temporary files in `commands/`. Run `npm run cleanup` to remove stale ones, or `npm run cleanup-dry-run` to preview what would be removed.
+
+## Project structure
+
+```
+app.js                     Entry point for a single instance
+instances.js               Multi-instance management CLI
+cleanup-commands.js        Removes stale command files
+process-management/        Process manager, background launcher, instance monitor
+src/
+  cache/                   In-memory cache
+  config/                  Configuration loading, validation, and live reload
+  database/                PostgreSQL storage
+  handlers/                Message, system event, member, and command handling
+  instance/                Instance lifecycle and status tracking
+  utils/                   Auto-updater, shutdown, performance, message helpers
+  webhook/                 Webhook delivery and embed formatting
 ```
 
 ## Troubleshooting
 
-### Common Issues
+| Problem | What to check |
+| --- | --- |
+| Database connection errors | PostgreSQL is running, the database and user exist, and the credentials in `settings.json` are correct. |
+| Invalid token errors | The token is current. The instance stops and reports the error to `systemHook` rather than restarting. |
+| Messages are not relayed | The account can see the channel, and the mapping's `channelId` or `guildId` and `channelName` are correct. `fetch-channels` shows what the account can access. |
+| An instance will not start | `node instances.js logs <name>` and the error log in `logs/`. |
 
-1. **Database Connection Errors**
-   - Verify PostgreSQL is running
-   - Check credentials in config
-   - Run `node utils/test-database.js` to test connection
+## License
 
-2. **Invalid Token Errors**
-   - Check if token is correct and active
-   - Verify bot has necessary permissions
-   - System webhook will notify of token issues
-
-3. **Memory Issues**
-   - Adjust cache limits in memory cache configuration
-   - Monitor RAM usage in performance stats
-
-### Testing
-
-```bash
-# Test database connection
-node utils/test-database.js
-
-# Test modules
-node utils/test-modules.js
-
-# Test webhook notifications
-node test-webhook-notification.js
-```
-
-## Migration from Previous Versions
-
-See `POSTGRESQL_MIGRATION_GUIDE.md` for detailed migration instructions from SQLite or Redis-based setups.
-
-## Support
-
-For issues, suggestions, or contributions, please open an issue on GitHub. The project includes comprehensive error handling and logging to help diagnose problems.
+Released under the [MIT License](LICENSE).
